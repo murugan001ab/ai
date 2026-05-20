@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+.env
+.venv/
+myenv/
+
+# AI Models
+*.pt
+*.pth
+
+# Node.js
+node_modules/
+dist/
+build/
+
+# Logs
+*.log
+
+# Images generated dynamically
+idle_snapshots/
+ppe_violations/
+unauthorized_snapshots/
+idle_captures/
+employee/
+yolov8n_openvino_model
+# Excel / temporary files
+*.xlsx
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Vite
+.vite/
+
+# IDE
+.vscode/
+.idea/
+
+# React build
+frontend/dist/
+
+# Environment files
+.env
+.env.local
+
+alembic/versions/__pycache__/
+*.sqlite3
+*.env
+coverage/
+.pytest_cache/

@@ -1,0 +1,16 @@
+fastapi[standard]
+uvicorn[standard]
+sqlmodel
+sqlalchemy[asyncio]
+asyncpg
+alembic
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+aiokafka
+websockets
+httpx
+python-dotenv
+greenlet
