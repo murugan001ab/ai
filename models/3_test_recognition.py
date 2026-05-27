@@ -3,15 +3,39 @@ import numpy as np
 import pickle
 import threading
 import time
+import os
 
 from insightface.app import FaceAnalysis
 from db_config import db_manager
+
 # =========================================================
-# CAMERA RTSP
-# USE stream1 FOR BETTER QUALITY
+# GET CAMERAS FROM DATABASE
 # =========================================================
 
-CAMERAS = db_manager.get_cameras()
+camera_list = db_manager.get_cameras()
+
+print("\nDATABASE CAMERA LIST:")
+print(camera_list)
+
+# =========================================================
+# CREATE CAMERA DICTIONARY
+# =========================================================
+
+CAMERAS = {}
+
+for cam in camera_list:
+
+    CAMERAS[cam["name"]] = {
+
+        "camera_id": cam["id"],
+
+        "zone_id": cam["zone_id"],
+
+        "rtsp_link": cam["rtsp_url"]
+    }
+
+print("\nAVAILABLE CAMERAS:")
+print(CAMERAS)
 
 # =========================================================
 # CONFIG
@@ -30,46 +54,38 @@ PROCESS_EVERY_N = 2
 UPSCALE = 1.5
 
 # =========================================================
-# MEMBERS
+# COLORS
 # =========================================================
-import os
 
-EMBEDDINGS_DIR = "/home/hacker/Projects/ai/models/embeddings"
+AUTHORIZED_COLOR = (0, 255, 0)
+
+UNAUTHORIZED_COLOR = (0, 0, 255)
+
+UNKNOWN_COLOR = (0, 255, 255)
+
+# =========================================================
+# LOAD MEMBERS FROM EMBEDDINGS
+# =========================================================
 
 MEMBERS = []
 
 for file in os.listdir(EMBEDDINGS_DIR):
 
-    file_path = os.path.join(EMBEDDINGS_DIR, file)
+    file_path = os.path.join(
+        EMBEDDINGS_DIR,
+        file
+    )
 
-    # Check only files
     if os.path.isfile(file_path):
 
-        # Remove extension
         filename_without_ext = os.path.splitext(file)[0]
 
-        MEMBERS.append(filename_without_ext)
+        MEMBERS.append(
+            filename_without_ext
+        )
 
-
-
-# =========================================================
-# COLORS
-# =========================================================
-
-MEMBER_COLORS = {
-
-    "Malavika": (225, 0, 255),
-
-    "Selva": (255, 165, 0),
-
-    "Madhavan": (0, 200, 255),
-
-    "Nidheesh": (255, 255, 255),
-
-    "Ram": (50, 200, 255),
-}
-
-UNKNOWN_COLOR = (0, 0, 255)
+print("\nMEMBERS FOUND:")
+print(MEMBERS)
 
 # =========================================================
 # LOAD EMBEDDINGS
@@ -81,7 +97,10 @@ known_people = []
 
 for name in MEMBERS:
 
-    path = f"{EMBEDDINGS_DIR}/{name.lower()}.pkl"
+    path = os.path.join(
+        EMBEDDINGS_DIR,
+        f"{name.lower()}.pkl"
+    )
 
     try:
 
@@ -92,7 +111,9 @@ for name in MEMBERS:
         embeddings = data["embeddings"]
 
         embeddings = [
+
             e / np.linalg.norm(e)
+
             for e in embeddings
         ]
 
@@ -102,18 +123,11 @@ for name in MEMBERS:
 
             "name": name,
 
-            "matrix": matrix,
-
-            "color": MEMBER_COLORS.get(
-                name,
-                (0, 255, 0)
-            )
+            "matrix": matrix
         })
 
         print(
-            f"Loaded "
-            f"{len(embeddings)} embeddings "
-            f"→ {name}"
+            f"Loaded {len(embeddings)} embeddings -> {name}"
         )
 
     except Exception as e:
@@ -129,8 +143,7 @@ if len(known_people) == 0:
     exit()
 
 print(
-    f"\nLoaded "
-    f"{len(known_people)} people"
+    f"\nLoaded {len(known_people)} people"
 )
 
 # =========================================================
@@ -198,6 +211,7 @@ class CameraReader:
         with self.lock:
 
             if self.frame is None:
+
                 return None
 
             return self.frame.copy()
@@ -225,13 +239,23 @@ def identify(face_embedding):
 
     best_score = -1
 
-    best_color = UNKNOWN_COLOR
-
     for person in known_people:
+
+        # =================================================
+        # COSINE SIMILARITY
+        # =================================================
 
         scores = person["matrix"] @ emb
 
+        # =================================================
+        # MAX SCORE
+        # =================================================
+
         score = float(scores.max())
+
+        # =================================================
+        # SELECT BEST MATCH
+        # =================================================
 
         if score > best_score:
 
@@ -241,30 +265,52 @@ def identify(face_embedding):
 
                 best_name = person["name"]
 
-                best_color = person["color"]
-
             else:
 
                 best_name = "Unknown"
 
-                best_color = UNKNOWN_COLOR
-
     return (
         best_name,
-        best_score,
-        best_color
+        best_score
     )
+
+# =========================================================
+# CHECK CAMERA
+# =========================================================
+
+if CAM_SELECT not in CAMERAS:
+
+    print(f"\nERROR: {CAM_SELECT} not found")
+
+    print(list(CAMERAS.keys()))
+
+    exit()
+
+# =========================================================
+# GET CAMERA DETAILS
+# =========================================================
+
+camera_data = CAMERAS[CAM_SELECT]
+
+CAMERA_ID = camera_data["camera_id"]
+
+ZONE_ID = camera_data["zone_id"]
+
+RTSP_URL = camera_data["rtsp_link"]
+
+print(f"\nCamera ID : {CAMERA_ID}")
+
+print(f"Zone ID   : {ZONE_ID}")
+
+print(f"RTSP URL  : {RTSP_URL}")
 
 # =========================================================
 # OPEN CAMERA
 # =========================================================
 
-RTSP_URL = CAMERAS[CAM_SELECT]
-
 print(f"\nOpening {CAM_SELECT}")
 
 cam = CameraReader(RTSP_URL)
-
 
 time.sleep(2)
 
@@ -297,6 +343,7 @@ while True:
     frame = cam.read()
 
     if frame is None:
+
         continue
 
     frame_count += 1
@@ -317,21 +364,19 @@ while True:
         faces = app.get(scaled)
 
         print(
-            f"Faces detected: "
-            f"{len(faces)}"
+            f"Faces detected: {len(faces)}"
         )
 
         last_results = []
 
         for face in faces:
 
-            name, score, color = identify(
+            name, score = identify(
                 face.embedding
             )
 
             print(
-                f"{name} | "
-                f"similarity={score:.4f}"
+                f"{name} | similarity={score:.4f}"
             )
 
             # =============================================
@@ -344,10 +389,37 @@ while True:
 
             ).astype(int)
 
-            label = (
-                f"{name} "
-                f"{score:.2f}"
-            )
+            # =============================================
+            # AUTHORIZATION LOGIC
+            # =============================================
+
+            if name == "Unknown":
+
+                label = "UNKNOWN PERSON"
+
+                color = UNKNOWN_COLOR
+
+            else:
+
+                # =========================================
+                # HR ZONE => UNAUTHORIZED
+                # =========================================
+
+                if ZONE_ID == 2:
+
+                    label = f"{name} - UNAUTHORIZED"
+
+                    color = UNAUTHORIZED_COLOR
+
+                # =========================================
+                # OTHER ZONES => AUTHORIZED
+                # =========================================
+
+                else:
+
+                    label = f"{name} - AUTHORIZED"
+
+                    color = AUTHORIZED_COLOR
 
             last_results.append(
 
@@ -378,7 +450,7 @@ while True:
 
         cv2.rectangle(
             frame,
-            (x1, y1 - 30),
+            (x1, y1 - 35),
             (x2, y1),
             color,
             -1
@@ -387,9 +459,9 @@ while True:
         cv2.putText(
             frame,
             label,
-            (x1 + 5, y1 - 8),
+            (x1 + 5, y1 - 10),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.65,
+            0.6,
             (255, 255, 255),
             2
         )
@@ -419,6 +491,26 @@ while True:
         2
     )
 
+    cv2.putText(
+        frame,
+        f"CAMERA ID: {CAMERA_ID}",
+        (20, 80),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (255, 255, 255),
+        2
+    )
+
+    cv2.putText(
+        frame,
+        f"ZONE ID: {ZONE_ID}",
+        (20, 120),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (255, 255, 255),
+        2
+    )
+
     # =====================================================
     # DISPLAY
     # =====================================================
@@ -436,6 +528,7 @@ while True:
     key = cv2.waitKey(1)
 
     if key == ord("q"):
+
         break
 
 # =========================================================

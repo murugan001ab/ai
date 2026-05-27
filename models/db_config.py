@@ -21,7 +21,7 @@ class DatabaseManager:
             "port": os.getenv("DB_PORT"),
             "sslmode": "require"
         }
-
+        print( os.getenv("DB_HOST"))
         # Store permissions in memory
         self.user_zone_permissions = {}
 
@@ -125,7 +125,7 @@ class DatabaseManager:
     
             cur.close()
             conn.close()
-    
+            print(cameras)
             return cameras
     
         except Exception as e:
