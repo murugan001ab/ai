@@ -21,7 +21,7 @@ class DatabaseManager:
             "port": os.getenv("DB_PORT"),
             "sslmode": "require"
         }
-        print( os.getenv("DB_HOST"))
+
         # Store permissions in memory
         self.user_zone_permissions = {}
 
@@ -61,12 +61,12 @@ class DatabaseManager:
 
             query = """
                 SELECT 
-                    u.name,
+                    u.employee_id,
                     array_agg(z.zone_id) AS assigned_zones
                 FROM user_zone_permissions z
                 INNER JOIN users u
                     ON u.id = z.user_id
-                GROUP BY z.user_id, u.name;
+                GROUP BY z.user_id, u.employee_id;
             """
 
             cur.execute(query)
@@ -76,9 +76,11 @@ class DatabaseManager:
             permissions = {}
 
             for row in rows:
-                permissions[row["name"]] = row["assigned_zones"]
+                permissions[row["employee_id"]] = row["assigned_zones"]
 
             self.user_zone_permissions = permissions
+
+            print("zone perimisstion",self.user_zone_permissions)
 
             cur.close()
             conn.close()
@@ -102,6 +104,8 @@ class DatabaseManager:
 
         allowed_zones = self.user_zone_permissions.get(person_name, [])
 
+        print(allowed_zones)
+
         return current_zone in allowed_zones
 
 
@@ -112,22 +116,22 @@ class DatabaseManager:
 
         try:
             conn = self.get_connection()
-    
+
             cur = conn.cursor(cursor_factory=RealDictCursor)
-    
+
             query = """
                 SELECT * FROM cameras;
             """
-    
+
             cur.execute(query)
-    
+
             cameras = cur.fetchall()
-    
+
             cur.close()
             conn.close()
-            print(cameras)
+
             return cameras
-    
+
         except Exception as e:
             print(f"Camera Load Error: {e}")
             return []

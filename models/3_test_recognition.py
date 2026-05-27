@@ -4,21 +4,56 @@ import pickle
 import threading
 import time
 import os
+import json
 
+from confluent_kafka import Producer
 from insightface.app import FaceAnalysis
+from psycopg2.extras import RealDictCursor
+
 from db_config import db_manager
 
 # =========================================================
-# GET CAMERAS FROM DATABASE
+# LOAD DATABASE DATA
 # =========================================================
 
 camera_list = db_manager.get_cameras()
+
+db_manager.load_user_zone_permissions()
 
 print("\nDATABASE CAMERA LIST:")
 print(camera_list)
 
 # =========================================================
-# CREATE CAMERA DICTIONARY
+# KAFKA CONFIG
+# =========================================================
+
+KAFKA_BROKER = "localhost:9092"
+
+KAFKA_TOPIC = "face-events"
+
+producer = Producer({
+    "bootstrap.servers": KAFKA_BROKER
+})
+
+# =========================================================
+# KAFKA CALLBACK
+# =========================================================
+
+def delivery_report(err, msg):
+
+    if err is not None:
+
+        print(f"Kafka Error: {err}")
+
+    else:
+
+        print(
+            f"Delivered to {msg.topic()} "
+            f"partition={msg.partition()}"
+        )
+
+# =========================================================
+# CAMERA DICTIONARY
 # =========================================================
 
 CAMERAS = {}
@@ -45,6 +80,10 @@ CAM_SELECT = "cam4"
 
 EMBEDDINGS_DIR = "embeddings"
 
+CAPTURE_DIR = "facecaptures"
+
+os.makedirs(CAPTURE_DIR, exist_ok=True)
+
 SIM_THRESHOLD = 0.35
 
 DET_SIZE = (640, 640)
@@ -52,6 +91,8 @@ DET_SIZE = (640, 640)
 PROCESS_EVERY_N = 2
 
 UPSCALE = 1.5
+
+DETECTION_TIMEOUT = 5
 
 # =========================================================
 # COLORS
@@ -64,7 +105,13 @@ UNAUTHORIZED_COLOR = (0, 0, 255)
 UNKNOWN_COLOR = (0, 255, 255)
 
 # =========================================================
-# LOAD MEMBERS FROM EMBEDDINGS
+# ACTIVE DETECTIONS
+# =========================================================
+
+ACTIVE_DETECTIONS = {}
+
+# =========================================================
+# LOAD MEMBERS
 # =========================================================
 
 MEMBERS = []
@@ -241,21 +288,9 @@ def identify(face_embedding):
 
     for person in known_people:
 
-        # =================================================
-        # COSINE SIMILARITY
-        # =================================================
-
         scores = person["matrix"] @ emb
 
-        # =================================================
-        # MAX SCORE
-        # =================================================
-
         score = float(scores.max())
-
-        # =================================================
-        # SELECT BEST MATCH
-        # =================================================
 
         if score > best_score:
 
@@ -275,6 +310,23 @@ def identify(face_embedding):
     )
 
 # =========================================================
+# SAVE FACE IMAGE
+# =========================================================
+
+def save_face_capture(frame, name):
+
+    filename = f"{name}_{int(time.time())}.jpg"
+
+    path = os.path.join(
+        CAPTURE_DIR,
+        filename
+    )
+
+    cv2.imwrite(path, frame)
+
+    return filename
+
+# =========================================================
 # CHECK CAMERA
 # =========================================================
 
@@ -287,7 +339,7 @@ if CAM_SELECT not in CAMERAS:
     exit()
 
 # =========================================================
-# GET CAMERA DETAILS
+# CAMERA DETAILS
 # =========================================================
 
 camera_data = CAMERAS[CAM_SELECT]
@@ -369,19 +421,15 @@ while True:
 
         last_results = []
 
+        current_visible_people = set()
+
         for face in faces:
 
             name, score = identify(
                 face.embedding
             )
 
-            print(
-                f"{name} | similarity={score:.4f}"
-            )
-
-            # =============================================
-            # SCALE BACK BBOX
-            # =============================================
+            current_time = time.time()
 
             x1, y1, x2, y2 = (
 
@@ -390,36 +438,91 @@ while True:
             ).astype(int)
 
             # =============================================
-            # AUTHORIZATION LOGIC
+            # UNKNOWN PERSON
             # =============================================
 
             if name == "Unknown":
 
-                label = "UNKNOWN PERSON"
+                label = "UNKNOWN"
 
                 color = UNKNOWN_COLOR
 
             else:
 
-                # =========================================
-                # HR ZONE => UNAUTHORIZED
-                # =========================================
+                current_visible_people.add(name)
 
-                if ZONE_ID == 2:
+                is_allowed = db_manager.is_zone_allowed(
+                    name,
+                    ZONE_ID
+                )
+
+                if is_allowed:
+
+                    label = f"{name} - AUTHORIZED"
+
+                    color = AUTHORIZED_COLOR
+
+                else:
 
                     label = f"{name} - UNAUTHORIZED"
 
                     color = UNAUTHORIZED_COLOR
 
                 # =========================================
-                # OTHER ZONES => AUTHORIZED
+                # SEND EVENT ONLY ONCE
                 # =========================================
+
+                if name not in ACTIVE_DETECTIONS:
+
+                    image_path = save_face_capture(
+                        frame,
+                        name
+                    )
+
+                    event = {
+
+                        "event_name": "face-events",
+
+                        "camera_id": CAMERA_ID,
+
+                        "zone_id": ZONE_ID,
+
+                        "name": name,
+
+                        "similarity": round(
+                            float(score),
+                            4
+                        ),
+
+                        "authorized": is_allowed,
+
+                        "image_path": image_path,
+
+                        "timestamp": int(current_time)
+                    }
+
+                    producer.produce(
+                        KAFKA_TOPIC,
+                        key=name,
+                        value=json.dumps(event),
+                        callback=delivery_report
+                    )
+
+                    producer.poll(0)
+
+                    ACTIVE_DETECTIONS[name] = current_time
+
+                    print(
+                        f"[EVENT SENT] {event}"
+                    )
 
                 else:
 
-                    label = f"{name} - AUTHORIZED"
+                    ACTIVE_DETECTIONS[name] = current_time
 
-                    color = AUTHORIZED_COLOR
+            # =============================================
+            # STORE DRAW RESULT
+            # =============================================
 
             last_results.append(
 
@@ -429,6 +532,26 @@ while True:
                     color
                 )
             )
+
+        # =================================================
+        # REMOVE PEOPLE WHO LEFT FRAME
+        # =================================================
+
+        remove_keys = []
+
+        for person, last_seen in ACTIVE_DETECTIONS.items():
+
+            if person not in current_visible_people:
+
+                if time.time() - last_seen > DETECTION_TIMEOUT:
+
+                    remove_keys.append(person)
+
+        for person in remove_keys:
+
+            del ACTIVE_DETECTIONS[person]
+
+            print(f"{person} left frame")
 
     # =====================================================
     # DRAW RESULTS
@@ -538,5 +661,7 @@ while True:
 cam.release()
 
 cv2.destroyAllWindows()
+
+producer.flush()
 
 print("Stopped")
