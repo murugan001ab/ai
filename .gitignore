@@ -23,6 +23,7 @@ build/
 # Images generated dynamically
 idle_snapshots/
 ppe_violations/
+dataset
 unauthorized_snapshots/
 idle_captures/
 employee/
