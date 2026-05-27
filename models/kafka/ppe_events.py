@@ -7,7 +7,7 @@ consumer = Consumer({
     'auto.offset.reset': 'earliest'
 })
 
-consumer.subscribe(['ppe-event'])
+consumer.subscribe(['ppe-events'])
 
 while True:
     msg = consumer.poll(1.0)

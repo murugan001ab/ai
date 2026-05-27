@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select, func
 
-from app.api.deps import DBSession, CurrentUser, AdminUser,AdminOrSuperAdmin
+from app.api.deps import DBSession, CurrentUser, AdminOrSuperAdmin
 from app.crud import crud_zone, crud_equipment, crud_zone_equipment_rule, crud_user_zone_permission
 from app.schemas.base import BaseResponse, PaginatedResponse
 from app.schemas.misc import (
@@ -12,6 +12,7 @@ from app.schemas.misc import (
     UserZonePermissionCreate, UserZonePermissionRead,
 )
 from app.models.zone_equipment_rule import ZoneEquipmentRule
+
 router = APIRouter(tags=["Zones & Equipment"])
 
 
@@ -32,7 +33,6 @@ async def list_zones(db: DBSession, _: CurrentUser, page: int = 1, page_size: in
 
 @zone_router.post("", response_model=BaseResponse[ZoneRead], status_code=201)
 async def create_zone(payload: ZoneCreate, db: DBSession, _: AdminOrSuperAdmin):
-    # print("helo")
     zone = await crud_zone.create(db, obj_in=payload)
     return BaseResponse(data=ZoneRead.model_validate(zone), message="Zone created")
 
@@ -81,9 +81,7 @@ async def list_equipment(db: DBSession, _: CurrentUser, page: int = 1, page_size
 @equipment_router.post("", response_model=BaseResponse[EquipmentRead], status_code=201)
 async def create_equipment(payload: EquipmentCreate, db: DBSession, _: AdminOrSuperAdmin):
     eq = await crud_equipment.create(db, obj_in=payload)
-    data=EquipmentRead.model_validate(eq)
-    print(data)
-    return BaseResponse(data=data,message="Equipment created")
+    return BaseResponse(data=EquipmentRead.model_validate(eq), message="Equipment created")
 
 
 @equipment_router.get("/{eq_id}", response_model=BaseResponse[EquipmentRead])
@@ -117,15 +115,13 @@ async def delete_equipment(eq_id: int, db: DBSession, _: AdminOrSuperAdmin):
 rules_router = APIRouter(prefix="/zone-equipment-rules")
 
 
-
-@rules_router.get("", response_model=PaginatedResponse[ZoneEquipmentRule])
+@rules_router.get("", response_model=PaginatedResponse[ZoneEquipmentRuleRead])
 async def list_rules(
     db: DBSession,
     _: CurrentUser,
     page: int = 1,
     page_size: int = 20,
 ):
-
     query = (
         select(ZoneEquipmentRule)
         .options(
@@ -134,27 +130,23 @@ async def list_rules(
         )
     )
 
-    # Count
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar_one()
-
-    # Pagination
-    offset = (page - 1) * page_size
-
-    result = await db.execute(
-        query.offset(offset).limit(page_size)
+    count_result = await db.execute(
+        select(func.count()).select_from(query.subquery())
     )
+    total = count_result.scalar_one()
 
+    offset = (page - 1) * page_size
+    result = await db.execute(query.offset(offset).limit(page_size))
     items = result.scalars().all()
 
     return PaginatedResponse(
-        data=[ZoneEquipmentRule.model_validate(r) for r in items],
+        data=[ZoneEquipmentRuleRead.model_validate(r) for r in items],
         total=total,
         page=page,
         page_size=page_size,
         pages=crud_zone_equipment_rule.calc_pages(total, page_size),
     )
+
 
 @rules_router.post("", response_model=BaseResponse[ZoneEquipmentRuleRead], status_code=201)
 async def create_rule(payload: ZoneEquipmentRuleCreate, db: DBSession, _: AdminOrSuperAdmin):

@@ -6,13 +6,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-
+from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.database import init_db
 from app.api.routes import api_router
 from app.websocket.routes import ws_router
 from app.kafka.producer import kafka_producer
 from app.kafka.consumer import start_consumers
+from app.services.ppe_buffer import ppe_buffer
 from app.utils.exceptions import (
     http_exception_handler,
     validation_exception_handler,
@@ -40,6 +41,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Start Kafka producer
     await kafka_producer.start()
 
+    # Start PPE event buffer (batches DB writes every 2s)
+    ppe_buffer.start()
+
     # Start Kafka consumers as background tasks
     tasks = start_consumers()
     _consumer_tasks.extend(tasks)
@@ -51,6 +55,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     for task in _consumer_tasks:
         task.cancel()
+
+    # Flush remaining buffered PPE events before exit
+    await ppe_buffer.stop()
 
     await kafka_producer.stop()
     logger.info("Shutdown complete.")
@@ -74,6 +81,12 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+
+    app.mount(
+    "/ppe_violations",
+    StaticFiles(directory="/home/hacker/Projects/ai/models/ppe_violations"),
+    name="ppe_violations"
     )
 
     # ── Exception Handlers ────────────────────────────────────────────────────

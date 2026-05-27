@@ -53,7 +53,7 @@ class AIEvent(TimestampMixin, table=True):
         default=None,
         sa_column=Column("metadata", JSONB, nullable=True)
     )
-
+    
     # Relationships
     camera: Optional["Camera"] = Relationship(back_populates="ai_events")
     zone: Optional["Zone"] = Relationship(back_populates="ai_events")

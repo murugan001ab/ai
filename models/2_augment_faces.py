@@ -10,13 +10,22 @@ from insightface.app import FaceAnalysis
 # CONFIG
 # =========================================================
 
-MEMBERS = [
-    "Malavika",
-    "Selva",
-    "Madhavan",
-    "Nidheesh",
-    "Ram",
-]
+import sys
+
+# =========================================================
+# MEMBERS — can be overridden via env var TRAIN_MEMBER
+# so the FastAPI backend can trigger training per employee
+# =========================================================
+
+_env_member = os.environ.get("TRAIN_MEMBER", "").strip()
+
+MEMBERS = (
+    [_env_member]
+    if _env_member
+    else [
+        "Malavika",
+    ]
+)
 
 DATASET_DIR = "dataset"
 

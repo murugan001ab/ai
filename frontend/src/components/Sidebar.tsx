@@ -10,6 +10,7 @@ import {
   Cctv,
   LogOut,
   MapPin,
+  User,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -17,6 +18,7 @@ const menus = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Live Monitoring', icon: Video, badge: '12', path: '/live' },
   { label: 'PPE Compliance', icon: ShieldCheck, path: '/ppe' },
+  { label: 'User Management', icon: User, path: '/users' },
   { label: 'Reports', icon: FileBarChart, path: '/reports' },
 ]
 

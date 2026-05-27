@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AIEventBase(BaseModel):
@@ -10,7 +10,15 @@ class AIEventBase(BaseModel):
     event_type: str
     confidence: Optional[float] = None
     image_path: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    # The DB column is `metadata` but the SQLModel Python attr is `event_metadata`.
+    # We accept `metadata` from callers and write it as `event_metadata` to the model.
+    metadata: Optional[Dict[str, Any]] = Field(default=None, alias=None)
+
+    def to_model_dict(self) -> Dict[str, Any]:
+        """Return a dict with `event_metadata` key so CRUDBase.create maps correctly."""
+        d = self.model_dump()
+        d["event_metadata"] = d.pop("metadata", None)
+        return d
 
 
 class AIEventCreate(AIEventBase):

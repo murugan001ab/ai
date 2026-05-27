@@ -86,8 +86,12 @@ async def list_ppe_events(db: DBSession, _: CurrentUser, page: int = 1, page_siz
 
 @ppe_router.post("", response_model=BaseResponse[PPEEventRead], status_code=201)
 async def create_ppe_event(payload: PPEEventCreate, db: DBSession, _: CurrentUser):
+    from app.websocket.manager import manager
     ev = await crud_ppe_event.create(db, obj_in=payload)
-    return BaseResponse(data=PPEEventRead.model_validate(ev), message="PPE event created")
+    ev_read = PPEEventRead.model_validate(ev)
+    # Broadcast to WebSocket dashboard so the frontend receives the event in real-time
+    await manager.broadcast_event({"type": "ppe_event", "data": ev_read.model_dump()})
+    return BaseResponse(data=ev_read, message="PPE event created")
 
 
 @ppe_router.get("/{ev_id}", response_model=BaseResponse[PPEEventRead])
@@ -115,8 +119,11 @@ async def list_face_events(db: DBSession, _: CurrentUser, page: int = 1, page_si
 
 @face_router.post("", response_model=BaseResponse[FaceRecognitionEventRead], status_code=201)
 async def create_face_event(payload: FaceRecognitionEventCreate, db: DBSession, _: CurrentUser):
+    from app.websocket.manager import manager
     ev = await crud_face_event.create(db, obj_in=payload)
-    return BaseResponse(data=FaceRecognitionEventRead.model_validate(ev), message="Face event created")
+    ev_read = FaceRecognitionEventRead.model_validate(ev)
+    await manager.broadcast_event({"type": "face_event", "data": ev_read.model_dump()})
+    return BaseResponse(data=ev_read, message="Face event created")
 
 
 @face_router.get("/{ev_id}", response_model=BaseResponse[FaceRecognitionEventRead])
@@ -144,8 +151,11 @@ async def list_idle_events(db: DBSession, _: CurrentUser, page: int = 1, page_si
 
 @idle_router.post("", response_model=BaseResponse[IdleEventRead], status_code=201)
 async def create_idle_event(payload: IdleEventCreate, db: DBSession, _: CurrentUser):
+    from app.websocket.manager import manager
     ev = await crud_idle_event.create(db, obj_in=payload)
-    return BaseResponse(data=IdleEventRead.model_validate(ev), message="Idle event created")
+    ev_read = IdleEventRead.model_validate(ev)
+    await manager.broadcast_event({"type": "idle_event", "data": ev_read.model_dump()})
+    return BaseResponse(data=ev_read, message="Idle event created")
 
 
 @idle_router.get("/{ev_id}", response_model=BaseResponse[IdleEventRead])
@@ -173,8 +183,11 @@ async def list_violations(db: DBSession, _: CurrentUser, page: int = 1, page_siz
 
 @violation_router.post("", response_model=BaseResponse[ZoneViolationEventRead], status_code=201)
 async def create_violation(payload: ZoneViolationEventCreate, db: DBSession, _: CurrentUser):
+    from app.websocket.manager import manager
     ev = await crud_zone_violation.create(db, obj_in=payload)
-    return BaseResponse(data=ZoneViolationEventRead.model_validate(ev), message="Violation recorded")
+    ev_read = ZoneViolationEventRead.model_validate(ev)
+    await manager.broadcast_event({"type": "zone_violation", "data": ev_read.model_dump()})
+    return BaseResponse(data=ev_read, message="Violation recorded")
 
 
 @violation_router.get("/{ev_id}", response_model=BaseResponse[ZoneViolationEventRead])

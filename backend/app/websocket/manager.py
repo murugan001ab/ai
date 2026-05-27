@@ -21,7 +21,8 @@ class ConnectionManager:
         self._global: List[WebSocket] = []
 
     async def connect(self, websocket: WebSocket, room_id: Optional[str] = None) -> None:
-        await websocket.accept()
+        # Note: websocket is already accepted by _authenticate_ws before this is called.
+        # Do NOT call websocket.accept() here again.
         if room_id:
             self._rooms[room_id].append(websocket)
             logger.info(f"WS connected to room={room_id}. Room size={len(self._rooms[room_id])}")

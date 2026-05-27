@@ -2,6 +2,7 @@ import { BrowserRouter, useLocation } from 'react-router-dom'
 import AppRouter from './router/AppRouter'
 import Sidebar from './components/Sidebar'
 import { AuthProvider } from './contexts/AuthContext'
+import { WSProvider } from './contexts/WSContext'
 
 function Layout() {
   const { pathname } = useLocation()
@@ -17,12 +18,13 @@ function Layout() {
   )
 }
 
-// AuthProvider is INSIDE BrowserRouter so useNavigate works inside AuthContext
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Layout />
+        <WSProvider>
+          <Layout />
+        </WSProvider>
       </AuthProvider>
     </BrowserRouter>
   )

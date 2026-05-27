@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import DBSession, CurrentUser, AdminUser
+from app.api.deps import DBSession, CurrentUser, AdminOrSuperAdmin
 from app.crud import crud_camera, crud_camera_ai_config
 from app.schemas.base import BaseResponse, PaginatedResponse
 from app.schemas.camera import (
@@ -27,7 +27,7 @@ async def list_cameras(db: DBSession, _: CurrentUser, page: int = 1, page_size: 
 
 
 @camera_router.post("", response_model=BaseResponse[CameraRead], status_code=201)
-async def create_camera(payload: CameraCreate, db: DBSession, _: AdminUser):
+async def create_camera(payload: CameraCreate, db: DBSession, _: AdminOrSuperAdmin):
     cam = await crud_camera.create(db, obj_in=payload)
     return BaseResponse(data=CameraRead.model_validate(cam), message="Camera created")
 
@@ -41,7 +41,7 @@ async def get_camera(camera_id: int, db: DBSession, _: CurrentUser):
 
 
 @camera_router.patch("/{camera_id}", response_model=BaseResponse[CameraRead])
-async def update_camera(camera_id: int, payload: CameraUpdate, db: DBSession, _: AdminUser):
+async def update_camera(camera_id: int, payload: CameraUpdate, db: DBSession, _: AdminOrSuperAdmin):
     cam = await crud_camera.get(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -50,7 +50,7 @@ async def update_camera(camera_id: int, payload: CameraUpdate, db: DBSession, _:
 
 
 @camera_router.delete("/{camera_id}", response_model=BaseResponse[None])
-async def delete_camera(camera_id: int, db: DBSession, _: AdminUser):
+async def delete_camera(camera_id: int, db: DBSession, _: AdminOrSuperAdmin):
     cam = await crud_camera.get(db, camera_id)
     if not cam:
         raise HTTPException(status_code=404, detail="Camera not found")
@@ -71,7 +71,7 @@ async def list_configs(db: DBSession, _: CurrentUser, page: int = 1, page_size: 
 
 
 @config_router.post("", response_model=BaseResponse[CameraAIConfigRead], status_code=201)
-async def create_config(payload: CameraAIConfigCreate, db: DBSession, _: AdminUser):
+async def create_config(payload: CameraAIConfigCreate, db: DBSession, _: AdminOrSuperAdmin):
     cfg = await crud_camera_ai_config.create(db, obj_in=payload)
     return BaseResponse(data=CameraAIConfigRead.model_validate(cfg), message="Config created")
 
@@ -85,7 +85,7 @@ async def get_config(config_id: int, db: DBSession, _: CurrentUser):
 
 
 @config_router.patch("/{config_id}", response_model=BaseResponse[CameraAIConfigRead])
-async def update_config(config_id: int, payload: CameraAIConfigUpdate, db: DBSession, _: AdminUser):
+async def update_config(config_id: int, payload: CameraAIConfigUpdate, db: DBSession, _: AdminOrSuperAdmin):
     cfg = await crud_camera_ai_config.get(db, config_id)
     if not cfg:
         raise HTTPException(status_code=404, detail="Config not found")
@@ -94,7 +94,7 @@ async def update_config(config_id: int, payload: CameraAIConfigUpdate, db: DBSes
 
 
 @config_router.delete("/{config_id}", response_model=BaseResponse[None])
-async def delete_config(config_id: int, db: DBSession, _: AdminUser):
+async def delete_config(config_id: int, db: DBSession, _: AdminOrSuperAdmin):
     cfg = await crud_camera_ai_config.get(db, config_id)
     if not cfg:
         raise HTTPException(status_code=404, detail="Config not found")

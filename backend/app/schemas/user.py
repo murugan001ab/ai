@@ -5,6 +5,16 @@ from pydantic import BaseModel, EmailStr
 
 from app.schemas.role import RoleRead
 
+from pydantic import BaseModel
+from app.schemas.misc import ZoneRead
+
+
+class UserZonePermissionRead(BaseModel):
+    id: int
+    zone: ZoneRead
+
+    model_config = {"from_attributes": True}
+
 class UserBase(BaseModel):
     employee_id: str
     name: str
@@ -12,6 +22,8 @@ class UserBase(BaseModel):
     role_id: Optional[int] = None
     is_active: bool = True
 
+    profile_image: Optional[str] = None
+    is_trained: bool = False
 
 class UserCreate(UserBase):
     password: str
@@ -24,6 +36,9 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     password: Optional[str] = None
 
+    profile_image: Optional[str] = None
+    is_trained: Optional[bool] = None
+
 
 class UserRead(UserBase):
     id: int
@@ -32,10 +47,10 @@ class UserRead(UserBase):
     model_config = {"from_attributes": True}
 
 
-
-
 class UserReadWithRole(UserRead):
     role: Optional[RoleRead] = None
+
+    zone_permissions: list[UserZonePermissionRead] = []
 
 class TokenPayload(BaseModel):
     sub: str

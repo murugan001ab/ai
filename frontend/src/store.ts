@@ -33,7 +33,6 @@ export const violations: ViolationData[] = [
   { type: 'Gloves', count: 14, color: '#f97316' },
   { type: 'Reflective Vest', count: 9, color: '#eab308' },
   { type: 'Safety Boots', count: 6, color: '#8b5cf6' },
-  { type: 'Goggles', count: 4, color: '#3b82f6' },
 ]
 
 export const alerts: Alert[] = [

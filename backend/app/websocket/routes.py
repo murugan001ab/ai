@@ -19,27 +19,41 @@ logger = logging.getLogger(__name__)
 ws_router = APIRouter(tags=["WebSocket"])
 
 
-async def _authenticate_ws(websocket: WebSocket) -> Optional[User]:
+async def _authenticate_ws(websocket: WebSocket, token_param: Optional[str] = None) -> Optional[User]:
     """
-    Validate the access_token cookie on a WebSocket handshake.
-    Returns the User on success, or None if the token is missing/invalid.
-    WebSocket close codes: 1008 = policy violation (used for auth failures).
+    Accept the WebSocket, then validate the access_token.
+    Checks (in order):
+      1. `token` query parameter  → ws://host/ws/dashboard?token=<jwt>
+      2. `access_token` cookie    → set automatically if browser is logged in
+    Returns the User on success, closes with 1008 on failure.
     """
-    token = websocket.cookies.get("access_token")
+    await websocket.accept()
+
+    # 1. Query param (easiest for testing + non-browser clients)
+    token = token_param
+
+    # 2. Cookie fallback
     if not token:
+        token = websocket.cookies.get("access_token")
+
+    if not token:
+        logger.warning("WS auth failed: no token provided (cookie or ?token=)")
         await websocket.close(code=1008, reason="Not authenticated")
         return None
 
     token_data = decode_token(token)
     if not token_data or token_data.get("type") != "access":
+        logger.warning("WS auth failed: invalid or expired token")
         await websocket.close(code=1008, reason="Invalid or expired token")
         return None
 
     user_id = token_data.get("sub")
     if not user_id:
+        logger.warning("WS auth failed: token has no sub field")
         await websocket.close(code=1008, reason="Invalid token payload")
         return None
 
+    user = None
     async for db in get_session():
         stmt = (
             select(User)
@@ -51,17 +65,18 @@ async def _authenticate_ws(websocket: WebSocket) -> Optional[User]:
         user = result.scalar_one_or_none()
 
     if not user or not user.is_active:
+        logger.warning(f"WS auth failed: user_id={user_id} not found or inactive")
         await websocket.close(code=1008, reason="User not found or inactive")
         return None
 
+    logger.info(f"WS authenticated: user_id={user.id}")
     return user
 
 
-@ws_router.websocket("/ws/dashboard")
-async def dashboard_ws(websocket: WebSocket):
+@ws_router.websocket("/ws/events")
+async def dashboard_ws(websocket: WebSocket, token: Optional[str] = Query(default=None)):
     """Global dashboard live feed — receives all AI events and alerts."""
-    await websocket.accept()
-    user = await _authenticate_ws(websocket)
+    user = await _authenticate_ws(websocket, token_param=token)
     if not user:
         return
 
@@ -77,10 +92,9 @@ async def dashboard_ws(websocket: WebSocket):
 
 
 @ws_router.websocket("/ws/camera/{camera_id}")
-async def camera_ws(websocket: WebSocket, camera_id: int):
+async def camera_ws(websocket: WebSocket, camera_id: int, token: Optional[str] = Query(default=None)):
     """Per-camera live event feed."""
-    await websocket.accept()
-    user = await _authenticate_ws(websocket)
+    user = await _authenticate_ws(websocket, token_param=token)
     if not user:
         return
 
@@ -97,10 +111,9 @@ async def camera_ws(websocket: WebSocket, camera_id: int):
 
 
 @ws_router.websocket("/ws/zone/{zone_id}")
-async def zone_ws(websocket: WebSocket, zone_id: int):
+async def zone_ws(websocket: WebSocket, zone_id: int, token: Optional[str] = Query(default=None)):
     """Per-zone live event feed."""
-    await websocket.accept()
-    user = await _authenticate_ws(websocket)
+    user = await _authenticate_ws(websocket, token_param=token)
     if not user:
         return
 

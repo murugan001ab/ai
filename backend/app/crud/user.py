@@ -52,4 +52,107 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         return user.is_active
 
 
+
+from typing import Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.crud.base import CRUDBase
+from app.models.worker_image import WorkerImage
+from app.schemas.worker import (
+    WorkerImageCreate,
+    WorkerImageUpdate,
+)
+
+
+class CRUDWorkerImage(
+    CRUDBase[
+        WorkerImage,
+        WorkerImageCreate,
+        WorkerImageUpdate,
+    ]
+):
+    async def get_by_user(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+    ) -> list[WorkerImage]:
+
+        result = await db.execute(
+            select(WorkerImage)
+            .where(
+                WorkerImage.user_id == user_id
+            )
+            .order_by(WorkerImage.id.asc())
+        )
+
+        return list(
+            result.scalars().all()
+        )
+
+    async def delete_by_user(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+    ) -> None:
+
+        images = await self.get_by_user(
+            db,
+            user_id=user_id,
+        )
+
+        for image in images:
+            await db.delete(image)
+
+        await db.flush()
+
+    async def get_by_path(
+        self,
+        db: AsyncSession,
+        *,
+        image_path: str,
+    ) -> Optional[WorkerImage]:
+
+        result = await db.execute(
+            select(WorkerImage).where(
+                WorkerImage.image_path
+                == image_path
+            )
+        )
+
+        return result.scalar_one_or_none()
+
+    async def update_embedding(
+        self,
+        db: AsyncSession,
+        *,
+        image_id: int,
+        embedding: str,
+    ) -> Optional[WorkerImage]:
+
+        image = await self.get(
+            db,
+            image_id,
+        )
+
+        if not image:
+            return None
+
+        image.face_embedding = embedding
+
+        db.add(image)
+
+        await db.flush()
+        await db.refresh(image)
+
+        return image
+
+
+crud_worker_image = CRUDWorkerImage(
+    WorkerImage
+)
+
 crud_user = CRUDUser(User)

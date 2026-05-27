@@ -1,63 +1,135 @@
-import psycopg2
+# db_manager.py
+
 import os
+import psycopg2
 
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
-
 
 load_dotenv()
 
-DB_HOST = os.getenv("DB_HOST")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_PORT = os.getenv("DB_PORT")
 
-DB_PARAMS = {
-    "host": DB_HOST,
-    "database": DB_NAME,
-    "user": DB_USER,
-    "password": DB_PASSWORD,
-    "port": DB_PORT,
-    "sslmode": "require"
-}
+class DatabaseManager:
 
-def init_db():
-    try:
-        conn = psycopg2.connect(**DB_PARAMS)
-        cur = conn.cursor()
-        # Updated table schema to use image_path (TEXT) instead of image_data (BYTEA)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS inactivity_log (
-                id SERIAL PRIMARY KEY,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                zone_id TEXT,
-                worker_id TEXT,
-                idle_duration_seconds INTEGER,
-                image_path TEXT
-            );
-        """)
-        conn.commit()
-        cur.close()
-        conn.close()
-        print(f"Database '{DB_NAME}' ready (using Image Paths).")
-    except Exception as e:
-        print(f"Database Init Error: {e}")
+    def __init__(self):
 
-def log_idle_event(zone, worker_id, duration, image_path):
-    """Saves the idle event details and the local file path to Postgres."""
-    try:
-        conn = psycopg2.connect(**DB_PARAMS)
-        cur = conn.cursor()
-        
-        query = """
-            INSERT INTO inactivity_log (zone_id, worker_id, idle_duration_seconds, image_path)
-            VALUES (%s, %s, %s, %s)
-        """
-        cur.execute(query, (zone, f"Worker {worker_id}", int(duration), image_path))
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        print(f"Path Logged: {image_path}")
-    except Exception as e:
-        print(f"Logging Error: {e}")
+        self.db_params = {
+            "host": os.getenv("DB_HOST"),
+            "database": os.getenv("DB_NAME"),
+            "user": os.getenv("DB_USER"),
+            "password": os.getenv("DB_PASSWORD"),
+            "port": os.getenv("DB_PORT"),
+            "sslmode": "require"
+        }
+
+        # Store permissions in memory
+        self.user_zone_permissions = {}
+
+    # =====================================================
+    # CONNECTION
+    # =====================================================
+
+    def get_connection(self):
+        return psycopg2.connect(**self.db_params)
+
+    # =====================================================
+    # INIT DATABASE
+    # =====================================================
+
+    def init_db(self):
+
+        try:
+            conn = self.get_connection()
+
+            print(f"Database '{self.db_params['database']}' connected.")
+
+            conn.close()
+
+        except Exception as e:
+            print(f"Database Init Error: {e}")
+
+    # =====================================================
+    # LOAD USER ZONE PERMISSIONS
+    # =====================================================
+
+    def load_user_zone_permissions(self):
+
+        try:
+            conn = self.get_connection()
+
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+
+            query = """
+                SELECT 
+                    u.name,
+                    array_agg(z.zone_id) AS assigned_zones
+                FROM user_zone_permissions z
+                INNER JOIN users u
+                    ON u.id = z.user_id
+                GROUP BY z.user_id, u.name;
+            """
+
+            cur.execute(query)
+
+            rows = cur.fetchall()
+
+            permissions = {}
+
+            for row in rows:
+                permissions[row["name"]] = row["assigned_zones"]
+
+            self.user_zone_permissions = permissions
+
+            cur.close()
+            conn.close()
+
+            print("Zone permissions loaded successfully")
+
+            return self.user_zone_permissions
+
+        except Exception as e:
+            print(f"Permission Load Error: {e}")
+
+            self.user_zone_permissions = {}
+
+            return {}
+
+    # =====================================================
+    # CHECK ACCESS
+    # =====================================================
+
+    def is_zone_allowed(self, person_name, current_zone):
+
+        allowed_zones = self.user_zone_permissions.get(person_name, [])
+
+        return current_zone in allowed_zones
+
+
+# =========================================================
+# CREATE SINGLE GLOBAL INSTANCE
+# =========================================================
+    def get_cameras(self):
+
+        try:
+            conn = self.get_connection()
+    
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+            query = """
+                SELECT * FROM cameras;
+            """
+    
+            cur.execute(query)
+    
+            cameras = cur.fetchall()
+    
+            cur.close()
+            conn.close()
+    
+            return cameras
+    
+        except Exception as e:
+            print(f"Camera Load Error: {e}")
+            return []
+
+db_manager = DatabaseManager()

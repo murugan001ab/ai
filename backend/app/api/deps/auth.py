@@ -20,7 +20,7 @@ async def get_current_user(
 ) -> User:
     
 
-
+    print(access_token)
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -113,7 +113,7 @@ async def require_superadmin(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
 
-    if not current_user.role or current_user.role.name != "SUPERADMIN":
+    if not current_user.role or current_user.role.name != "SUPER_ADMIN":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super Admin access required",
@@ -126,7 +126,7 @@ async def require_admin_or_superadmin(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
 
-    # print("corrent",current_user.role.name)
+    print("corrent",current_user.role.name)
     if (
         not current_user.role
         or current_user.role.name not in ["ADMIN", "SUPER_ADMIN"]

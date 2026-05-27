@@ -18,19 +18,50 @@ class User(TimestampMixin, SoftDeleteMixin, table=True):
     __tablename__ = "users"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+
     employee_id: str = Field(unique=True, index=True, max_length=50)
     name: str = Field(max_length=100)
+
     email: str = Field(unique=True, index=True, max_length=255)
+
     password: str = Field(max_length=255)
-    role_id: Optional[int] = Field(default=None, foreign_key="roles.id", index=True)
+
+    role_id: Optional[int] = Field(
+        default=None,
+        foreign_key="roles.id",
+        index=True
+    )
+
     is_active: bool = Field(default=True, nullable=False)
+
+    # NEW
+    profile_image: Optional[str] = Field(
+        default=None,
+        max_length=500
+    )
+
+    # Face trained or not
+    is_trained: bool = Field(default=False, nullable=False)
 
     # Relationships
     role: Optional["Role"] = Relationship(back_populates="users")
-    worker_images: List["WorkerImage"] = Relationship(back_populates="user")
-    zone_permissions: List["UserZonePermission"] = Relationship(back_populates="user")
-    ai_events: List["AIEvent"] = Relationship(back_populates="user")
+
+    worker_images: List["WorkerImage"] = Relationship(
+        back_populates="user"
+    )
+
+    zone_permissions: List["UserZonePermission"] = Relationship(
+        back_populates="user"
+    )
+
+    ai_events: List["AIEvent"] = Relationship(
+        back_populates="user"
+    )
+
     face_recognition_events: List["FaceRecognitionEvent"] = Relationship(
         back_populates="matched_user"
     )
-    dashboard_sessions: List["DashboardSession"] = Relationship(back_populates="user")
+
+    dashboard_sessions: List["DashboardSession"] = Relationship(
+        back_populates="user"
+    )

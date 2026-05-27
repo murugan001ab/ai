@@ -27,6 +27,12 @@ class KafkaProducer:
             logger.info("Kafka producer started.")
         except Exception as exc:
             logger.warning(f"Kafka producer failed to start (running without Kafka): {exc}")
+            # Clean up the partially-initialised producer to avoid 'Unclosed' warnings
+            if self._producer is not None:
+                try:
+                    await self._producer.stop()
+                except Exception:
+                    pass
             self._producer = None
 
     async def stop(self) -> None:

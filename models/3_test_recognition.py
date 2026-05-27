@@ -5,18 +5,13 @@ import threading
 import time
 
 from insightface.app import FaceAnalysis
-
+from db_config import db_manager
 # =========================================================
 # CAMERA RTSP
 # USE stream1 FOR BETTER QUALITY
 # =========================================================
 
-CAMERAS = {
-    "cam1": "rtsp://Ckers2:zeekerslobby@192.168.0.126:554/stream1",
-    "cam2": "rtsp://Ckers2:zeekerslobby@192.168.0.127:554/stream1",
-    "cam3": "rtsp://Ckers2:zeekerslobby@192.168.0.104:554/stream1",
-    "cam4": "rtsp://Ckers2:zeekerslobby@192.168.0.101:554/stream1",
-}
+CAMERAS = db_manager.get_cameras()
 
 # =========================================================
 # CONFIG
@@ -37,14 +32,25 @@ UPSCALE = 1.5
 # =========================================================
 # MEMBERS
 # =========================================================
+import os
 
-MEMBERS = [
-    "Malavika",
-    "Selva",
-    "Madhavan",
-    "Nidheesh",
-    "Ram",
-]
+EMBEDDINGS_DIR = "/home/hacker/Projects/ai/models/embeddings"
+
+MEMBERS = []
+
+for file in os.listdir(EMBEDDINGS_DIR):
+
+    file_path = os.path.join(EMBEDDINGS_DIR, file)
+
+    # Check only files
+    if os.path.isfile(file_path):
+
+        # Remove extension
+        filename_without_ext = os.path.splitext(file)[0]
+
+        MEMBERS.append(filename_without_ext)
+
+
 
 # =========================================================
 # COLORS
@@ -258,6 +264,7 @@ RTSP_URL = CAMERAS[CAM_SELECT]
 print(f"\nOpening {CAM_SELECT}")
 
 cam = CameraReader(RTSP_URL)
+
 
 time.sleep(2)
 
