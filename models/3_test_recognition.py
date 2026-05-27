@@ -8,650 +8,414 @@ import json
 
 from confluent_kafka import Producer
 from insightface.app import FaceAnalysis
-from psycopg2.extras import RealDictCursor
+import onnxruntime as ort
 
 from db_config import db_manager
 
 # =========================================================
-# LOAD DATABASE DATA
+# DATABASE
 # =========================================================
 
 camera_list = db_manager.get_cameras()
-
 db_manager.load_user_zone_permissions()
 
-print("\nDATABASE CAMERA LIST:")
-print(camera_list)
-
 # =========================================================
-# KAFKA CONFIG
+# KAFKA
 # =========================================================
 
-KAFKA_BROKER = "localhost:9092"
-
+KAFKA_BROKER = "192.168.0.122:9092"
 KAFKA_TOPIC = "face-events"
 
-producer = Producer({
-    "bootstrap.servers": KAFKA_BROKER
-})
-
-# =========================================================
-# KAFKA CALLBACK
-# =========================================================
+producer = Producer({"bootstrap.servers": KAFKA_BROKER})
 
 def delivery_report(err, msg):
-
-    if err is not None:
-
+    if err:
         print(f"Kafka Error: {err}")
-
     else:
-
-        print(
-            f"Delivered to {msg.topic()} "
-            f"partition={msg.partition()}"
-        )
+        print(f"Delivered to {msg.topic()} partition={msg.partition()}")
 
 # =========================================================
-# CAMERA DICTIONARY
+# CAMERA CONFIG
 # =========================================================
 
 CAMERAS = {}
-
 for cam in camera_list:
-
     CAMERAS[cam["name"]] = {
-
         "camera_id": cam["id"],
-
         "zone_id": cam["zone_id"],
-
         "rtsp_link": cam["rtsp_url"]
     }
 
-print("\nAVAILABLE CAMERAS:")
-print(CAMERAS)
+CAM_SELECT = "cam4"
 
 # =========================================================
 # CONFIG
 # =========================================================
 
-CAM_SELECT = "cam4"
-
 EMBEDDINGS_DIR = "embeddings"
-
 CAPTURE_DIR = "facecaptures"
-
 os.makedirs(CAPTURE_DIR, exist_ok=True)
 
-SIM_THRESHOLD = 0.35
-
+SIM_THRESHOLD = 0.40
 DET_SIZE = (640, 640)
-
+UPSCALE = 1.5
 PROCESS_EVERY_N = 2
 
-UPSCALE = 1.5
+UNKNOWN_MAX_WAIT = 1.2
+UNKNOWN_MIN_FRAMES = 3
 
-DETECTION_TIMEOUT = 5
+UNAUTHORIZED_CONFIRM_TIME = 1
+UNAUTHORIZED_MIN_FRAMES = 2
 
-# =========================================================
-# COLORS
-# =========================================================
-
-AUTHORIZED_COLOR = (0, 255, 0)
-
-UNAUTHORIZED_COLOR = (0, 0, 255)
-
-UNKNOWN_COLOR = (0, 255, 255)
-
-# =========================================================
-# ACTIVE DETECTIONS
-# =========================================================
+KNOWN_GRACE_TIME = 5
 
 ACTIVE_DETECTIONS = {}
+PENDING_UNKNOWN = {}
+PENDING_UNAUTHORIZED = {}
+RECENT_KNOWN = {}
 
-# =========================================================
-# LOAD MEMBERS
-# =========================================================
-
-MEMBERS = []
-
-for file in os.listdir(EMBEDDINGS_DIR):
-
-    file_path = os.path.join(
-        EMBEDDINGS_DIR,
-        file
-    )
-
-    if os.path.isfile(file_path):
-
-        filename_without_ext = os.path.splitext(file)[0]
-
-        MEMBERS.append(
-            filename_without_ext
-        )
-
-print("\nMEMBERS FOUND:")
-print(MEMBERS)
+AUTHORIZED_COLOR = (0, 255, 0)
+UNAUTHORIZED_COLOR = (0, 0, 255)
+UNKNOWN_COLOR = (0, 255, 255)
 
 # =========================================================
 # LOAD EMBEDDINGS
 # =========================================================
 
-print("\nLoading embeddings...")
+MEMBERS = [os.path.splitext(f)[0] for f in os.listdir(EMBEDDINGS_DIR)]
 
 known_people = []
 
 for name in MEMBERS:
-
-    path = os.path.join(
-        EMBEDDINGS_DIR,
-        f"{name.lower()}.pkl"
-    )
+    path = os.path.join(EMBEDDINGS_DIR, f"{name.lower()}.pkl")
 
     try:
-
         with open(path, "rb") as f:
-
             data = pickle.load(f)
 
         embeddings = data["embeddings"]
-
-        embeddings = [
-
-            e / np.linalg.norm(e)
-
-            for e in embeddings
-        ]
-
-        matrix = np.stack(embeddings)
+        embeddings = [e / np.linalg.norm(e) for e in embeddings]
 
         known_people.append({
-
             "name": name,
-
-            "matrix": matrix
+            "matrix": np.stack(embeddings)
         })
 
-        print(
-            f"Loaded {len(embeddings)} embeddings -> {name}"
-        )
-
     except Exception as e:
-
-        print(f"FAILED: {name}")
-
-        print(e)
-
-if len(known_people) == 0:
-
-    print("No embeddings loaded")
-
-    exit()
-
-print(
-    f"\nLoaded {len(known_people)} people"
-)
+        print(f"FAILED {name}: {e}")
 
 # =========================================================
-# LOAD INSIGHTFACE
+# GPU / CPU AUTO
 # =========================================================
 
 print("\nLoading InsightFace...")
 
-app = FaceAnalysis(
-    name="buffalo_l",
-    providers=["CPUExecutionProvider"]
-)
+providers = ["CPUExecutionProvider"]
+ctx_id = -1
 
-app.prepare(
-    ctx_id=-1,
-    det_size=DET_SIZE
-)
+try:
+    if "CUDAExecutionProvider" in ort.get_available_providers():
+        providers = ["CUDAExecutionProvider"]
+        ctx_id = 0
+        print("GPU ENABLED")
+    else:
+        print("CPU MODE")
+except:
+    print("CPU FALLBACK")
 
-print("Model loaded")
+app = FaceAnalysis(name="buffalo_l", providers=providers)
+app.prepare(ctx_id=ctx_id, det_size=DET_SIZE)
 
 # =========================================================
 # CAMERA THREAD
 # =========================================================
 
 class CameraReader:
-
     def __init__(self, url):
-
         self.cap = cv2.VideoCapture(url)
-
-        self.cap.set(
-            cv2.CAP_PROP_BUFFERSIZE,
-            1
-        )
-
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self.frame = None
-
         self.lock = threading.Lock()
-
         self.running = True
 
-        self.thread = threading.Thread(
-            target=self.update,
-            daemon=True
-        )
-
+        self.thread = threading.Thread(target=self.update, daemon=True)
         self.thread.start()
 
     def update(self):
-
         while self.running:
-
             ret, frame = self.cap.read()
-
             if ret:
-
                 with self.lock:
-
                     self.frame = frame
-
             time.sleep(0.01)
 
     def read(self):
-
         with self.lock:
-
-            if self.frame is None:
-
-                return None
-
-            return self.frame.copy()
+            return None if self.frame is None else self.frame.copy()
 
     def release(self):
-
         self.running = False
-
         self.thread.join()
-
         self.cap.release()
 
 # =========================================================
-# IDENTIFY FACE
+# IDENTIFICATION
 # =========================================================
 
 def identify(face_embedding):
-
-    emb = (
-        face_embedding /
-        np.linalg.norm(face_embedding)
-    )
+    emb = face_embedding / np.linalg.norm(face_embedding)
 
     best_name = "Unknown"
-
     best_score = -1
 
     for person in known_people:
-
         scores = person["matrix"] @ emb
-
         score = float(scores.max())
 
         if score > best_score:
-
             best_score = score
+            best_name = person["name"] if score >= SIM_THRESHOLD else "Unknown"
 
-            if score >= SIM_THRESHOLD:
-
-                best_name = person["name"]
-
-            else:
-
-                best_name = "Unknown"
-
-    return (
-        best_name,
-        best_score
-    )
+    return best_name, best_score
 
 # =========================================================
-# SAVE FACE IMAGE
+# FACE ID STABILITY
 # =========================================================
 
-def save_face_capture(frame, name):
+def generate_face_id(bbox):
+    x1, y1, x2, y2 = bbox
+    return f"{x1//30}_{y1//30}_{x2//30}_{y2//30}"
+
+# =========================================================
+# EXPAND FOR PERSON (BODY STYLE CROP)
+# =========================================================
+
+def expand_person_bbox(frame, bbox):
+    x1, y1, x2, y2 = bbox
+
+    h, w = frame.shape[:2]
+
+    face_w = x2 - x1
+    face_h = y2 - y1
+
+    pad_x = int(face_w * 0.8)
+    pad_y_top = int(face_h * 0.5)
+    pad_y_bottom = int(face_h * 2.5)
+
+    x1 = max(0, x1 - pad_x)
+    x2 = min(w, x2 + pad_x)
+
+    y1 = max(0, y1 - pad_y_top)
+    y2 = min(h, y2 + pad_y_bottom)
+
+    return x1, y1, x2, y2
+
+# =========================================================
+# SAVE PERSON IMAGE (FULL BODY STYLE)
+# =========================================================
+
+def save_person_capture(frame, bbox, name):
+    x1, y1, x2, y2 = expand_person_bbox(frame, bbox)
+
+    person_img = frame[y1:y2, x1:x2]
+
+    if person_img.size == 0:
+        return None
+
+    person_img = cv2.resize(person_img, (640, 640))
 
     filename = f"{name}_{int(time.time())}.jpg"
+    path = os.path.join(CAPTURE_DIR, filename)
 
-    path = os.path.join(
-        CAPTURE_DIR,
-        filename
-    )
-
-    cv2.imwrite(path, frame)
+    cv2.imwrite(path, person_img)
 
     return filename
 
 # =========================================================
-# CHECK CAMERA
-# =========================================================
-
-if CAM_SELECT not in CAMERAS:
-
-    print(f"\nERROR: {CAM_SELECT} not found")
-
-    print(list(CAMERAS.keys()))
-
-    exit()
-
-# =========================================================
-# CAMERA DETAILS
+# CAMERA INIT
 # =========================================================
 
 camera_data = CAMERAS[CAM_SELECT]
 
 CAMERA_ID = camera_data["camera_id"]
-
 ZONE_ID = camera_data["zone_id"]
-
 RTSP_URL = camera_data["rtsp_link"]
 
-print(f"\nCamera ID : {CAMERA_ID}")
-
-print(f"Zone ID   : {ZONE_ID}")
-
-print(f"RTSP URL  : {RTSP_URL}")
-
-# =========================================================
-# OPEN CAMERA
-# =========================================================
-
-print(f"\nOpening {CAM_SELECT}")
-
 cam = CameraReader(RTSP_URL)
-
 time.sleep(2)
 
-frame = cam.read()
-
-if frame is None:
-
-    print("Cannot open RTSP")
-
+if cam.read() is None:
+    print("Camera not opening")
     exit()
-
-print("Camera connected")
-
-print("Frame shape:", frame.shape)
 
 # =========================================================
 # MAIN LOOP
 # =========================================================
 
 frame_count = 0
-
 last_results = []
-
 fps_start = time.time()
-
 fps = 0
 
 while True:
 
     frame = cam.read()
-
     if frame is None:
-
         continue
 
     frame_count += 1
 
-    # =====================================================
-    # FACE DETECTION
-    # =====================================================
-
     if frame_count % PROCESS_EVERY_N == 0:
 
-        scaled = cv2.resize(
-            frame,
-            None,
-            fx=UPSCALE,
-            fy=UPSCALE
-        )
-
+        scaled = cv2.resize(frame, None, fx=UPSCALE, fy=UPSCALE)
         faces = app.get(scaled)
 
-        print(
-            f"Faces detected: {len(faces)}"
-        )
-
         last_results = []
-
-        current_visible_people = set()
+        current_visible = set()
 
         for face in faces:
 
-            name, score = identify(
-                face.embedding
-            )
-
+            name, score = identify(face.embedding)
             current_time = time.time()
 
-            x1, y1, x2, y2 = (
+            x1, y1, x2, y2 = (face.bbox / UPSCALE).astype(int)
+            bbox = (x1, y1, x2, y2)
+            face_id = generate_face_id(bbox)
 
-                face.bbox / UPSCALE
-
-            ).astype(int)
-
-            # =============================================
-            # UNKNOWN PERSON
-            # =============================================
+            # =================================================
+            # UNKNOWN
+            # =================================================
 
             if name == "Unknown":
 
-                label = "UNKNOWN"
+                if face_id not in PENDING_UNKNOWN:
+                    PENDING_UNKNOWN[face_id] = {
+                        "start": current_time,
+                        "frames": 1
+                    }
+                else:
+                    PENDING_UNKNOWN[face_id]["frames"] += 1
 
-                color = UNKNOWN_COLOR
+                elapsed = current_time - PENDING_UNKNOWN[face_id]["start"]
+                frames = PENDING_UNKNOWN[face_id]["frames"]
+
+                if elapsed >= UNKNOWN_MAX_WAIT and frames >= UNKNOWN_MIN_FRAMES:
+
+                    img = save_person_capture(frame, bbox, "unknown")
+
+                    if face_id not in ACTIVE_DETECTIONS:
+
+                        event = {
+                            "event_name": "face-events",
+                            "camera_id": CAMERA_ID,
+                            "zone_id": ZONE_ID,
+                            "name": "Unknown",
+                            "similarity": round(score, 4),
+                            "authorized": False,
+                            "image_path": img,
+                            "timestamp": int(current_time)
+                        }
+
+                        producer.produce(
+                            KAFKA_TOPIC,
+                            key="unknown",
+                            value=json.dumps(event),
+                            callback=delivery_report
+                        )
+                        producer.poll(0)
+
+                        ACTIVE_DETECTIONS[face_id] = current_time
+
+                    label = "UNKNOWN"
+                    color = UNKNOWN_COLOR
+
+                else:
+                    label = "CHECKING"
+                    color = UNKNOWN_COLOR
+
+            # =================================================
+            # KNOWN
+            # =================================================
 
             else:
 
-                current_visible_people.add(name)
+                current_visible.add(name)
 
-                is_allowed = db_manager.is_zone_allowed(
-                    name,
-                    ZONE_ID
-                )
+                if face_id in PENDING_UNKNOWN:
+                    del PENDING_UNKNOWN[face_id]
+
+                is_allowed = db_manager.is_zone_allowed(name, ZONE_ID)
 
                 if is_allowed:
-
                     label = f"{name} - AUTHORIZED"
-
                     color = AUTHORIZED_COLOR
 
                 else:
 
-                    label = f"{name} - UNAUTHORIZED"
+                    if name not in PENDING_UNAUTHORIZED:
+                        PENDING_UNAUTHORIZED[name] = {
+                            "start": current_time,
+                            "frames": 1
+                        }
+                    else:
+                        PENDING_UNAUTHORIZED[name]["frames"] += 1
 
-                    color = UNAUTHORIZED_COLOR
+                    elapsed = current_time - PENDING_UNAUTHORIZED[name]["start"]
+                    frames = PENDING_UNAUTHORIZED[name]["frames"]
 
-                # =========================================
-                # SEND EVENT ONLY ONCE
-                # =========================================
+                    if elapsed >= UNAUTHORIZED_CONFIRM_TIME and frames >= UNAUTHORIZED_MIN_FRAMES:
 
-                if name not in ACTIVE_DETECTIONS:
+                        img = save_person_capture(frame, bbox, name)
 
-                    image_path = save_face_capture(
-                        frame,
-                        name
-                    )
+                        event = {
+                            "event_name": "face-events",
+                            "camera_id": CAMERA_ID,
+                            "zone_id": ZONE_ID,
+                            "name": name,
+                            "similarity": round(score, 4),
+                            "authorized": False,
+                            "image_path": img,
+                            "timestamp": int(current_time)
+                        }
 
-                    event = {
+                        producer.produce(
+                            KAFKA_TOPIC,
+                            key=name,
+                            value=json.dumps(event),
+                            callback=delivery_report
+                        )
+                        producer.poll(0)
 
-                        "event_name": "face-events",
+                        label = f"{name} - UNAUTHORIZED"
+                        color = UNAUTHORIZED_COLOR
 
-                        "camera_id": CAMERA_ID,
+                    else:
+                        label = f"{name} - VERIFYING"
+                        color = UNAUTHORIZED_COLOR
 
-                        "zone_id": ZONE_ID,
-
-                        "name": name,
-
-                        "similarity": round(
-                            float(score),
-                            4
-                        ),
-
-                        "authorized": is_allowed,
-
-                        "image_path": image_path,
-
-                        "timestamp": int(current_time)
-                    }
-
-                    producer.produce(
-                        KAFKA_TOPIC,
-                        key=name,
-                        value=json.dumps(event),
-                        callback=delivery_report
-                    )
-
-                    producer.poll(0)
-
-                    ACTIVE_DETECTIONS[name] = current_time
-
-                    print(
-                        f"[EVENT SENT] {event}"
-                    )
-
-                else:
-
-                    ACTIVE_DETECTIONS[name] = current_time
-
-            # =============================================
-            # STORE DRAW RESULT
-            # =============================================
-
-            last_results.append(
-
-                (
-                    (x1, y1, x2, y2),
-                    label,
-                    color
-                )
-            )
-
-        # =================================================
-        # REMOVE PEOPLE WHO LEFT FRAME
-        # =================================================
-
-        remove_keys = []
-
-        for person, last_seen in ACTIVE_DETECTIONS.items():
-
-            if person not in current_visible_people:
-
-                if time.time() - last_seen > DETECTION_TIMEOUT:
-
-                    remove_keys.append(person)
-
-        for person in remove_keys:
-
-            del ACTIVE_DETECTIONS[person]
-
-            print(f"{person} left frame")
+            last_results.append(((x1, y1, x2, y2), label, color))
 
     # =====================================================
-    # DRAW RESULTS
+    # DRAW (SMALL FACE BOX ONLY)
     # =====================================================
 
-    for (
-        (x1, y1, x2, y2),
-        label,
-        color
-    ) in last_results:
+    for (x1, y1, x2, y2), label, color in last_results:
+        cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+        cv2.rectangle(frame, (x1, y1 - 30), (x2, y1), color, -1)
+        cv2.putText(frame, label, (x1 + 5, y1 - 8),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-        cv2.rectangle(
-            frame,
-            (x1, y1),
-            (x2, y2),
-            color,
-            2
-        )
-
-        cv2.rectangle(
-            frame,
-            (x1, y1 - 35),
-            (x2, y1),
-            color,
-            -1
-        )
-
-        cv2.putText(
-            frame,
-            label,
-            (x1 + 5, y1 - 10),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 255),
-            2
-        )
-
-    # =====================================================
     # FPS
-    # =====================================================
-
     if frame_count % 30 == 0:
-
-        elapsed = (
-            time.time() -
-            fps_start
-        )
-
-        fps = 30 / elapsed
-
+        fps = 30 / (time.time() - fps_start)
         fps_start = time.time()
 
-    cv2.putText(
-        frame,
-        f"FPS: {fps:.1f}",
-        (20, 40),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        1,
-        (0, 255, 255),
-        2
-    )
+    cv2.putText(frame, f"FPS: {fps:.1f}", (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
 
-    cv2.putText(
-        frame,
-        f"CAMERA ID: {CAMERA_ID}",
-        (20, 80),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
-        (255, 255, 255),
-        2
-    )
+    cv2.imshow("Face Recognition", cv2.resize(frame, (1280, 720)))
 
-    cv2.putText(
-        frame,
-        f"ZONE ID: {ZONE_ID}",
-        (20, 120),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
-        (255, 255, 255),
-        2
-    )
-
-    # =====================================================
-    # DISPLAY
-    # =====================================================
-
-    display = cv2.resize(
-        frame,
-        (1280, 720)
-    )
-
-    cv2.imshow(
-        "Face Recognition",
-        display
-    )
-
-    key = cv2.waitKey(1)
-
-    if key == ord("q"):
-
+    if cv2.waitKey(1) == ord("q"):
         break
 
 # =========================================================
@@ -659,9 +423,7 @@ while True:
 # =========================================================
 
 cam.release()
-
 cv2.destroyAllWindows()
-
 producer.flush()
 
 print("Stopped")
