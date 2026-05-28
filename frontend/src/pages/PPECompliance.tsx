@@ -247,9 +247,10 @@ function EquipmentBreakdown({ breakdown }: { breakdown: Record<string, number> }
 interface StreamPanelProps {
   cameraId: number | null
   cameraName: string | null
+  className?: string
 }
 
-function LiveStreamPanel({ cameraId, cameraName }: StreamPanelProps) {
+function LiveStreamPanel({ cameraId, cameraName, className = '' }: StreamPanelProps) {
   const [expanded, setExpanded] = useState(false)
   const [iframeReady, setIframeReady] = useState(false)
   const [rtspUrl, setRtspUrl] = useState<string | null>(null)
@@ -297,8 +298,8 @@ function LiveStreamPanel({ cameraId, cameraName }: StreamPanelProps) {
   if (!cameraId) {
     return (
       <div
-        className='relative rounded-2xl border border-slate-800/60 bg-slate-900/50 overflow-hidden'
-        style={{ aspectRatio: '16/9' }}
+        className={`relative rounded-2xl border border-slate-800/60 bg-slate-900/50 overflow-hidden ${className}`}
+        style={{ minHeight: '380px' }}
       >
         {scanlines}
         {cornerBrackets('border-slate-700/50')}
@@ -311,19 +312,19 @@ function LiveStreamPanel({ cameraId, cameraName }: StreamPanelProps) {
     )
   }
 
-const streamUrl = rtspUrl
-  ? buildStreamUrl(rtspUrl)
-  : ''
+  const streamUrl = rtspUrl
+    ? buildStreamUrl(rtspUrl)
+    : ''
   const displayName = cameraName ?? `CAM-${cameraId}`
 
   // ── Fullscreen portal ─────────────────────────────────────────────────────
   const streamContent = (isFullscreen: boolean) => (
     <div
       className={`relative bg-black overflow-hidden ${isFullscreen
-          ? 'fixed inset-4 z-50 rounded-2xl shadow-2xl shadow-cyan-500/10 border border-cyan-500/30'
-          : 'rounded-2xl border border-cyan-500/20'
+        ? 'fixed inset-4 z-50 rounded-2xl shadow-2xl shadow-cyan-500/10 border border-cyan-500/30'
+        : `rounded-2xl border border-cyan-500/20 ${className}`
         }`}
-      style={isFullscreen ? {} : { aspectRatio: '16/9' }}
+      style={isFullscreen ? {} : { minHeight: '420px' }}
     >
       {scanlines}
       {cornerBrackets('border-cyan-500/40')}
@@ -579,11 +580,11 @@ export default function PPECompliance() {
         {d && (
           <div className={`space-y-4 transition-opacity duration-300 ${dash.loading ? 'opacity-60' : 'opacity-100'}`}>
 
-            {/* ── Top row: Live Stream + Compliance Stats ───────────────────── */}
-            <div className='grid grid-cols-1 xl:grid-cols-2 gap-4'>
+            {/* ── Row 1: Live Stream (left) + Recent Violations (right) ──── */}
+            <div className='grid grid-cols-1 xl:grid-cols-2 gap-4 items-stretch'>
 
               {/* Live Stream */}
-              <div className='flex flex-col gap-2'>
+              <div className='flex flex-col gap-2 min-h-0'>
                 <div className='flex items-center gap-2 px-1'>
                   <Video className='h-3.5 w-3.5 text-cyan-500' />
                   <span className='text-xs font-bold text-slate-300 uppercase tracking-widest'>Live Stream</span>
@@ -608,71 +609,127 @@ export default function PPECompliance() {
                   </div>
                 )}
 
-                <LiveStreamPanel cameraId={dash.cameraId} cameraName={selectedCameraName} />
+                <LiveStreamPanel cameraId={dash.cameraId} cameraName={selectedCameraName} className='flex-1 min-h-0' />
               </div>
 
-              {/* Compliance summary */}
-              <div className='flex flex-col gap-3'>
-                <div className='bg-slate-900/50 border border-slate-800/60 rounded-2xl p-4 flex items-center gap-5'>
-                  <ComplianceRing rate={d.stats.compliance_rate} />
-                  <div className='flex-1 space-y-2'>
-                    <div>
-                      <p className='text-[10px] text-slate-500 uppercase tracking-widest'>Compliance Rate</p>
-                      <p className='text-2xl font-black text-white'>{d.stats.compliance_rate.toFixed(1)}<span className='text-base font-semibold text-slate-400'>%</span></p>
-                    </div>
-                    <div className='h-px bg-slate-800' />
-                    <div className='grid grid-cols-2 gap-2'>
-                      <div>
-                        <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Violations</p>
-                        <p className='text-lg font-bold text-red-400 tabular-nums'>{d.stats.total_violations}</p>
-                      </div>
-                      <div>
-                        <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Compliant</p>
-                        <p className='text-lg font-bold text-green-400 tabular-nums'>{d.stats.total_compliant}</p>
-                      </div>
-                    </div>
+              {/* Recent Violations */}
+              <div className='bg-slate-900/50 border border-slate-800/60 rounded-2xl overflow-hidden flex flex-col'>
+
+                {/* Header */}
+                <div className='flex items-center justify-between px-5 py-4 border-b border-slate-800/60 bg-slate-900/80 backdrop-blur-sm flex-shrink-0'>
+                  <div className='flex items-center gap-2'>
+                    <Eye className='h-4 w-4 text-slate-400' />
+
+                    <h3 className='text-xs font-bold text-slate-300 uppercase tracking-widest'>
+                      Recent Violations
+                    </h3>
+
+                    <span className='text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full'>
+                      {d.recent_violations.length}
+                    </span>
                   </div>
+
+                  {events.length > 0 && (
+                    <div className='flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-full'>
+                      <span className='h-1.5 w-1.5 bg-red-400 rounded-full animate-pulse' />
+
+                      <span className='text-[10px] text-red-400 font-semibold'>
+                        {events.length} live
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                <div className='grid grid-cols-2 gap-3'>
-                  <div className='bg-slate-900/50 border border-red-500/10 rounded-2xl p-3'>
-                    <div className='flex items-center justify-between mb-1'>
-                      <span className='text-[9px] font-semibold text-slate-500 uppercase tracking-widest'>Violation Rate</span>
-                      <AlertTriangle className='h-3 w-3 text-red-500/60' />
-                    </div>
-                    <p className='text-xl font-black text-red-400'>{d.stats.violation_rate.toFixed(1)}<span className='text-sm font-semibold text-red-500/60'>%</span></p>
-                  </div>
-                  <div className='bg-slate-900/50 border border-slate-700/30 rounded-2xl p-3'>
-                    <div className='flex items-center justify-between mb-1'>
-                      <span className='text-[9px] font-semibold text-slate-500 uppercase tracking-widest'>Date</span>
-                      <Clock className='h-3 w-3 text-slate-600' />
-                    </div>
-                    <p className='text-sm font-bold text-slate-300 leading-snug'>
-                      {new Date(d.stats.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </p>
-                  </div>
-                </div>
+                {/* Body */}
+                <div className='flex-1 overflow-y-auto p-4 space-y-3'>
 
-                {(d.zone || d.camera) && (
-                  <div className='flex gap-2'>
-                    {d.zone && (
-                      <div className='flex-1 bg-slate-900/40 border border-slate-800/40 rounded-xl px-3 py-2'>
-                        <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Zone</p>
-                        <p className='text-xs font-semibold text-slate-300 truncate'>{d.zone.name}</p>
+                  {d.recent_violations.length === 0 ? (
+                    <div className='flex flex-col items-center justify-center h-full gap-3 text-slate-600'>
+                      <ShieldCheck className='h-10 w-10 text-green-600/30' />
+
+                      <p className='text-sm text-slate-500'>
+                        No violations found
+                      </p>
+                    </div>
+                  ) : (
+                    d.recent_violations.map((viol) => (
+                      <div
+                        key={viol.event_id}
+                        className='group bg-slate-950/70 border border-slate-800/50 rounded-xl overflow-hidden hover:border-red-500/30 transition-all duration-300'
+                      >
+
+                        <div className='flex gap-3 p-3'>
+
+                          {/* Image */}
+                          <div className='relative flex-shrink-0'>
+                            {viol.image_path ? (
+                              <img
+                                src={`${API_BASE_IMAGE}/${viol.image_path}`}
+                                alt='violation'
+                                className='w-28 h-20 object-cover rounded-lg border border-slate-700/50 bg-slate-800'
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none'
+                                }}
+                              />
+                            ) : (
+                              <div className='w-28 h-20 rounded-lg bg-slate-800 border border-slate-700/40 flex items-center justify-center'>
+                                <Camera className='h-5 w-5 text-slate-700' />
+                              </div>
+                            )}
+
+                            <div className='absolute top-2 left-2 px-1.5 py-0.5 rounded bg-red-500/90 text-white text-[9px] font-bold uppercase tracking-wide'>
+                              Alert
+                            </div>
+                          </div>
+
+                          {/* Content */}
+                          <div className='flex-1 min-w-0 flex flex-col justify-between'>
+
+                            <div>
+                              <div className='flex items-start justify-between gap-2 mb-2'>
+
+                                <div className='min-w-0'>
+                                  <p className='text-sm font-semibold text-white truncate'>
+                                    {viol.camera_name ?? 'Unknown Camera'}
+                                  </p>
+
+                                  <p className='text-[11px] text-slate-500 mt-0.5'>
+                                    {new Date(viol.timestamp).toLocaleDateString()} •{' '}
+                                    {new Date(viol.timestamp).toLocaleTimeString()}
+                                  </p>
+                                </div>
+
+                                <AlertTriangle className='h-4 w-4 text-red-400 flex-shrink-0' />
+                              </div>
+
+                              {/* PPE Tags */}
+                              {viol.missing_ppe.length > 0 ? (
+                                <div className='flex flex-wrap gap-1.5'>
+                                  {viol.missing_ppe.map((item) => (
+                                    <PPEBadge key={item} item={item} />
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className='text-[11px] text-slate-600 italic'>
+                                  No PPE details available
+                                </p>
+                              )}
+                            </div>
+
+                          </div>
+                        </div>
+
+                        {/* Bottom Accent */}
+                        <div className='h-[2px] bg-gradient-to-r from-red-500/80 via-orange-500/60 to-transparent' />
                       </div>
-                    )}
-                    {d.camera && (
-                      <div className='flex-1 bg-slate-900/40 border border-cyan-500/10 rounded-xl px-3 py-2'>
-                        <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Camera</p>
-                        <p className='text-xs font-semibold text-cyan-300 truncate'>{d.camera.name}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* ── Middle row: Equipment + Hourly ───────────────────────────── */}
+            </div>{/* end Row 1 */}
+
+            {/* ── Row 2: Missing PPE Breakdown (left) + Hourly Violations (right) ─ */}
             <div className='grid grid-cols-1 xl:grid-cols-2 gap-4'>
               <div className='bg-slate-900/50 border border-slate-800/60 rounded-2xl p-5'>
                 <div className='flex items-center gap-2 mb-4'>
@@ -691,73 +748,52 @@ export default function PPECompliance() {
               </div>
             </div>
 
-            {/* ── Recent violations ────────────────────────────────────────── */}
-            <div className='grid grid-cols-1 xl:grid-cols-2 gap-4'>
-            <div className='bg-slate-900/50 border border-slate-800/60 rounded-2xl p-5 xl:col-span-2'>
-              <div className='flex items-center justify-between mb-4'>
-                <div className='flex items-center gap-2'>
-                  <Eye className='h-4 w-4 text-slate-400' />
-                  <h3 className='text-xs font-bold text-slate-300 uppercase tracking-widest'>Recent Violations</h3>
-                  <span className='text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded-full'>{d.recent_violations.length}</span>
-                </div>
-                {events.length > 0 && (
-                  <div className='flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-full'>
-                    <span className='h-1.5 w-1.5 bg-red-400 rounded-full animate-pulse' />
-                    <span className='text-[10px] text-red-400 font-semibold'>{events.length} new live</span>
+            {/* ── Row 3: Compliance Rate ──────────────────────────────────── */}
+            <div className='bg-slate-900/50 border border-slate-800/60 rounded-2xl p-4'>
+              <div className='flex flex-wrap items-center gap-6'>
+                <div className='flex items-center gap-5'>
+                  <ComplianceRing rate={d.stats.compliance_rate} />
+                  <div className='space-y-1'>
+                    <p className='text-[10px] text-slate-500 uppercase tracking-widest'>Compliance Rate</p>
+                    <p className='text-2xl font-black text-white'>{d.stats.compliance_rate.toFixed(1)}<span className='text-base font-semibold text-slate-400'>%</span></p>
                   </div>
-                )}
-              </div>
-
-              {d.recent_violations.length === 0 ? (
-                <div className='flex flex-col items-center py-10 gap-3 text-slate-600'>
-                  <ShieldCheck className='h-10 w-10 text-green-600/30' />
-                  <p className='text-sm text-slate-500'>No violations for this selection</p>
                 </div>
-              ) : (
-                <div className='space-y-2'>
-                  {d.recent_violations.map((viol) => (
-                    <div
-                      key={viol.event_id}
-                      className='group flex items-start gap-3 bg-slate-950/60 border border-slate-800/50 border-l-2 border-l-red-500/70 rounded-xl p-3 hover:border-l-red-400 hover:bg-slate-900/60 transition-all'
-                    >
-                      {viol.image_path ? (
-                        <img
-                          src={`${API_BASE_IMAGE}/${viol.image_path}`}
-                          alt='violation'
-                          className='h-14 w-20 object-cover rounded-lg flex-shrink-0 bg-slate-800 border border-slate-700/50'
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                        />
-                      ) : (
-                        <div className='h-14 w-20 rounded-lg bg-slate-800/60 border border-slate-700/30 flex items-center justify-center flex-shrink-0'>
-                          <Camera className='h-5 w-5 text-slate-700' />
-                        </div>
-                      )}
 
-                      <div className='flex-1 min-w-0'>
-                        <div className='flex items-center justify-between gap-2 mb-1.5'>
-                          <p className='text-sm font-semibold text-white truncate'>
-                            {viol.camera_name ?? 'Unknown Camera'}
-                          </p>
-                          <span className='text-[10px] text-slate-600 flex-shrink-0 font-mono bg-slate-800/60 px-2 py-0.5 rounded'>
-                            {new Date(viol.timestamp).toLocaleTimeString()}
-                          </span>
-                        </div>
-                        {viol.missing_ppe.length > 0 ? (
-                          <div className='flex flex-wrap gap-1'>
-                            {viol.missing_ppe.map((item) => (
-                              <PPEBadge key={item} item={item} />
-                            ))}
-                          </div>
-                        ) : (
-                          <p className='text-[11px] text-slate-600 italic'>No PPE details recorded</p>
-                        )}
-                      </div>
+                <div className='h-12 w-px bg-slate-800 hidden xl:block' />
+
+                <div className='flex flex-wrap gap-4 flex-1'>
+                  <div>
+                    <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Violations</p>
+                    <p className='text-lg font-bold text-red-400 tabular-nums'>{d.stats.total_violations}</p>
+                  </div>
+                  <div>
+                    <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Compliant</p>
+                    <p className='text-lg font-bold text-green-400 tabular-nums'>{d.stats.total_compliant}</p>
+                  </div>
+                  <div>
+                    <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Violation Rate</p>
+                    <p className='text-lg font-bold text-red-400 tabular-nums'>{d.stats.violation_rate.toFixed(1)}<span className='text-xs text-red-500/60'>%</span></p>
+                  </div>
+                  <div>
+                    <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Date</p>
+                    <p className='text-sm font-bold text-slate-300'>{new Date(d.stats.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                  </div>
+                  {d.zone && (
+                    <div>
+                      <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Zone</p>
+                      <p className='text-sm font-semibold text-slate-300 truncate max-w-[160px]'>{d.zone.name}</p>
                     </div>
-                  ))}
+                  )}
+                  {d.camera && (
+                    <div>
+                      <p className='text-[9px] text-slate-600 uppercase tracking-wider'>Camera</p>
+                      <p className='text-sm font-semibold text-cyan-300 truncate max-w-[160px]'>{d.camera.name}</p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-            </div>
+
           </div>
         )}
 
