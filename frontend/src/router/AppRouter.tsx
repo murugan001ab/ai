@@ -7,6 +7,7 @@ import ZoneManagement      from '../pages/ZoneManagement'
 import PPECompliance       from '../pages/PPECompliance'
 import Login               from '../pages/Login'
 import UserManagementPage from '../pages/UserManagementPage'
+import IlligalEntry      from '../pages/IlligalEntry'
 import { Loader2 }         from 'lucide-react'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -32,12 +33,13 @@ export default function AppRouter() {
     <Routes>
       <Route path='/login' element={user ? <Navigate to='/' replace /> : <Login />} />
 
-      {/* <Route path='/' element={<ProtectedRoute><Dashboard /></ProtectedRoute>} /> */}
+      <Route path='/' element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path='/live' element={<ProtectedRoute><Live /></ProtectedRoute>} />
       <Route path='/ppe' element={<ProtectedRoute><PPECompliance /></ProtectedRoute>} />
       <Route path='/cameras' element={<ProtectedRoute><CameraManagement /></ProtectedRoute>} />
       <Route path='/zones' element={<ProtectedRoute><ZoneManagement /></ProtectedRoute>} />
-      <Route path='/users' element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>} />
+      <Route path='/users'         element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>} />
+      <Route path='/illegal-entry' element={<ProtectedRoute><IlligalEntry /></ProtectedRoute>} />
 
     </Routes>
   )

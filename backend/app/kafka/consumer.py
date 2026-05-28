@@ -37,6 +37,8 @@ async def _consume_loop(topics: List[str]) -> None:
             async for msg in consumer:
                 try:
                     data = msg.value
+
+                    # print(data)
                     event_type = msg.topic  # e.g. "ppe-events"
                     camera_id = data.get("camera_id")
 
@@ -50,6 +52,10 @@ async def _consume_loop(topics: List[str]) -> None:
                     if event_type == "ppe-events":
                         from app.services.ppe_buffer import ppe_buffer
                         await ppe_buffer.add(data)
+                    if event_type == "face-events":
+                        from app.services.face_buffer import face_buffer
+                        await face_buffer.add(data)
+                        logger.debug(f"[face-events] received: {data}")
 
                     logger.debug(f"[Kafka→WS] topic={event_type} camera={camera_id}")
                 except Exception as exc:

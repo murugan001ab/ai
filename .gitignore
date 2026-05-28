@@ -26,6 +26,7 @@ ppe_violations/
 dataset
 unauthorized_snapshots/
 idle_captures/
+facecaptures
 employee/
 yolov8n_openvino_model
 # Excel / temporary files

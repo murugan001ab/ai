@@ -38,7 +38,8 @@ const WSContext = createContext<WSContextValue>({
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const WS_URL              = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000/ws/events'
+const WS_BASE_URL         = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000/ws/events'
+const API_BASE_URL        = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 const BASE_RETRY_MS       = 3_000
 const MAX_RETRY_MS        = 30_000
 const MAX_RETRIES         = 10
@@ -60,7 +61,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
     if (retryRef.current) { clearTimeout(retryRef.current); retryRef.current = null }
   }
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (
       wsRef.current?.readyState === WebSocket.OPEN ||
       wsRef.current?.readyState === WebSocket.CONNECTING
@@ -69,7 +70,26 @@ export function WSProvider({ children }: { children: ReactNode }) {
     intentionalRef.current = false
     setStatus('connecting')
 
-    const ws = new WebSocket(WS_URL)
+    // Fetch a short-lived WS token from the backend (reads the HttpOnly cookie server-side)
+    let wsUrl = WS_BASE_URL
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/ws-token`, {
+        credentials: 'include',   // sends the HttpOnly access_token cookie
+      })
+      if (res.ok) {
+        const json = await res.json()
+        const token = json?.data?.token
+        if (token) {
+          const separator = WS_BASE_URL.includes('?') ? '&' : '?'
+          wsUrl = `${WS_BASE_URL}${separator}token=${token}`
+        }
+      }
+    } catch {
+      // If the fetch fails (e.g. network issue), proceed without token;
+      // the backend will reject with 1008 and we'll retry.
+    }
+
+    const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = () => {

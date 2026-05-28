@@ -3,11 +3,13 @@ import Pagination from '../../../components/ui/Pagination'
 import { TableLoading, TableError, TableEmpty } from '../../../components/ui/TableStates'
 import StatusBadge from './StatusBadge'
 import type { CameraItem } from '../types'
+import type { ZoneItem } from '../../zones/types'
 
 const COLS = ['Name', 'RTSP URL', 'Zone', 'Status', '']
 
 interface Props {
   items: CameraItem[]
+  zones: ZoneItem[]
   total: number
   pages: number
   page: number
@@ -20,9 +22,10 @@ interface Props {
 }
 
 export default function CameraTable({
-  items, total, pages, page, loading, error,
+  items, zones, total, pages, page, loading, error,
   onEdit, onDelete, onPageChange, onRetry,
 }: Props) {
+  const zoneMap = new Map(zones.map((z) => [z.id, z.name]))
   return (
     <div className='bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden'>
       <table className='w-full text-sm'>
@@ -53,7 +56,9 @@ export default function CameraTable({
                   {cam.rtsp_url}
                 </td>
                 <td className='px-5 py-4 text-slate-400'>
-                  {cam.zone_id ?? <span className='text-slate-600'>—</span>}
+                  {cam.zone_id != null
+                    ? (zoneMap.get(cam.zone_id) ?? `Zone ${cam.zone_id}`)
+                    : <span className='text-slate-600'>—</span>}
                 </td>
                 <td className='px-5 py-4'>
                   <StatusBadge status={cam.status} />

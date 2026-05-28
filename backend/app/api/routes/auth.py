@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, HTTPException, status, Request, Response, Cookie
 from typing import Optional
 
@@ -107,6 +109,32 @@ async def refresh_token(
     )
 
     return BaseResponse(message="Token refreshed")
+
+
+@router.get("/ws-token", response_model=BaseResponse)
+async def get_ws_token(
+    db: DBSession,
+    access_token: Optional[str] = Cookie(default=None),
+):
+    """
+    Returns a short-lived (60s) token for WebSocket auth.
+    Call this just before opening the WebSocket, then pass
+    the token as ?token=<value> in the WS URL.
+    """
+    if not access_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    token_data = decode_token(access_token)
+    if not token_data or token_data.get("type") != "access":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    user_id = token_data.get("sub")
+    user = await crud_user.get(db, int(user_id))
+    if not user or not user.is_active or user.is_deleted:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    ws_token = create_access_token(subject=user.id, expires_delta=timedelta(seconds=60))
+    return BaseResponse(message="WS token issued", data={"token": ws_token})
 
 
 @router.post("/logout", response_model=BaseResponse)

@@ -11,6 +11,7 @@ import {
   LogOut,
   MapPin,
   User,
+  ShieldAlert,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -18,13 +19,16 @@ const menus = [
   { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
   { label: 'Live Monitoring', icon: Video, badge: '12', path: '/live' },
   { label: 'PPE Compliance', icon: ShieldCheck, path: '/ppe' },
-  { label: 'User Management', icon: User, path: '/users' },
+  { label: 'Illegal Entry', icon: ShieldAlert, path: '/illegal-entry' },
+  { label: 'Idle Moniter', icon: FileBarChart, path: '/idle-moniter' },
   { label: 'Reports', icon: FileBarChart, path: '/reports' },
 ]
 
 const adminMenus = [
   { label: 'Camera Management', icon: Cctv, path: '/cameras' },
   { label: 'Zone Management', icon: MapPin, path: '/zones' },
+  { label: 'User Management', icon: User, path: '/users' },
+
 ]
 
 export default function Sidebar() {

@@ -86,6 +86,8 @@ async def dashboard_ws(websocket: WebSocket, token: Optional[str] = Query(defaul
             data = await websocket.receive_text()
             if data == "ping":
                 await websocket.send_text("pong")
+            print(data)
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         logger.info("WS global client disconnected (user_id=%s).", user.id)

@@ -2,10 +2,12 @@ import { useState } from 'react'
 import Modal from '../../../components/ui/Modal'
 import { FormField, Input, Select } from '../../../components/ui/FormField'
 import type { CameraItem, CreateCameraPayload, UpdateCameraPayload } from '../types'
+import type { ZoneItem } from '../../zones/types'
 
 interface Props {
   /** null → add mode, populated → edit mode */
   camera: Partial<CameraItem> | null
+  zones: ZoneItem[]
   onClose: () => void
   onAdd: (payload: CreateCameraPayload) => Promise<void>
   onEdit: (id: number, payload: UpdateCameraPayload) => Promise<void>
@@ -20,7 +22,7 @@ function extractError(err: any): string {
   return err?.message ?? 'Something went wrong.'
 }
 
-export default function CameraModal({ camera, onClose, onAdd, onEdit }: Props) {
+export default function CameraModal({ camera, zones, onClose, onAdd, onEdit }: Props) {
   const isEdit = !!camera?.id
   const [form, setForm]     = useState<Partial<CameraItem>>(camera ?? EMPTY)
   const [saving, setSaving] = useState(false)
@@ -82,13 +84,16 @@ export default function CameraModal({ camera, onClose, onAdd, onEdit }: Props) {
         />
       </FormField>
 
-      <FormField label='Zone ID (optional)'>
-        <Input
-          type='number'
+      <FormField label='Zone (optional)'>
+        <Select
           value={form.zone_id ?? ''}
           onChange={(e) => set('zone_id', e.target.value ? Number(e.target.value) : null)}
-          placeholder='Leave blank for none'
-        />
+        >
+          <option value=''>— None —</option>
+          {zones.map((z) => (
+            <option key={z.id} value={z.id}>{z.name}</option>
+          ))}
+        </Select>
       </FormField>
 
       <FormField label='Status'>
