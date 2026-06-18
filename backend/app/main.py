@@ -15,6 +15,7 @@ from app.kafka.producer import kafka_producer
 from app.kafka.consumer import start_consumers
 from app.services.ppe_buffer import ppe_buffer
 from app.services.face_buffer import face_buffer
+from app.services.idle_buffer import idle_buffer
 from app.utils.exceptions import (
     http_exception_handler,
     validation_exception_handler,
@@ -48,6 +49,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Start Face event buffer (batches DB writes every 2s)
     face_buffer.start()
 
+    # Start Idle event buffer (batches DB writes every 2s)
+    idle_buffer.start()
+
     # Start Kafka consumers as background tasks
     tasks = start_consumers()
     _consumer_tasks.extend(tasks)
@@ -65,6 +69,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Flush remaining buffered Face events before exit
     await face_buffer.stop()
+
+    # Flush remaining buffered Idle events before exit
+    await idle_buffer.stop()
 
     await kafka_producer.stop()
     logger.info("Shutdown complete.")

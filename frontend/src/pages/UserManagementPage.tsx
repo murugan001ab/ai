@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 
 import apiClient from "../lib/axios"
+import { useAuth, UserRole } from "../contexts/AuthContext"
 
 type Role = {
   id: number
@@ -60,7 +61,7 @@ type PaginatedResponse = {
   pages: number
 }
 
-const roles = [
+const allRoles = [
   { id: 1, name: "SUPER_ADMIN" },
   { id: 2, name: "ADMIN" },
   { id: 3, name: "SUPERVISOR" },
@@ -68,10 +69,13 @@ const roles = [
 ]
 
 const ROLE_COLORS: Record<string, string> = {
-  SUPER_ADMIN: "bg-violet-100 text-violet-700 border border-violet-200",
-  ADMIN: "bg-blue-100 text-blue-700 border border-blue-200",
-  SUPERVISOR: "bg-amber-100 text-amber-700 border border-amber-200",
-  USER: "bg-gray-100 text-gray-600 border border-gray-200",
+  SUPER_ADMIN:
+    "bg-violet-100 text-violet-700 border border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700",
+  ADMIN:
+    "bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700",
+  SUPERVISOR:
+    "bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700",
+  USER: "bg-gray-100 text-gray-600 border border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600",
 }
 
 const MIN_TRAINING_IMAGES = 10
@@ -95,12 +99,12 @@ function Avatar({ name, src, size = 40 }: { name: string; src?: string | null; s
     .toUpperCase()
 
   const colors = [
-    "bg-violet-100 text-violet-600",
-    "bg-blue-100 text-blue-600",
-    "bg-emerald-100 text-emerald-600",
-    "bg-amber-100 text-amber-600",
-    "bg-rose-100 text-rose-600",
-    "bg-cyan-100 text-cyan-600",
+    "bg-violet-100 text-violet-600 dark:bg-violet-900/50 dark:text-violet-300",
+    "bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300",
+    "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-300",
+    "bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-300",
+    "bg-rose-100 text-rose-600 dark:bg-rose-900/50 dark:text-rose-300",
+    "bg-cyan-100 text-cyan-600 dark:bg-cyan-900/50 dark:text-cyan-300",
   ]
   const color = colors[name.charCodeAt(0) % colors.length]
 
@@ -119,6 +123,8 @@ function Avatar({ name, src, size = 40 }: { name: string; src?: string | null; s
 }
 
 export default function UserManagementPage() {
+  const { user: currentUser } = useAuth()
+
   const [users, setUsers] = useState<UserType[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -148,6 +154,17 @@ export default function UserManagementPage() {
   const [trainDone, setTrainDone] = useState(false)
   const [trainSuccess, setTrainSuccess] = useState<boolean | null>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
+
+  // ── Role options filtered by the current user's role ───────────────────────
+  // SUPER_ADMIN → all roles
+  // ADMIN       → ADMIN, SUPERVISOR, USER  (cannot create SUPER_ADMIN)
+  // Others      → no access to this page at all (guard elsewhere)
+  const availableRoles = useMemo(() => {
+    if (currentUser?.role_id === UserRole.SUPER_ADMIN) return allRoles
+    if (currentUser?.role_id === UserRole.ADMIN)
+      return allRoles.filter((r) => r.id !== UserRole.SUPER_ADMIN)
+    return []
+  }, [currentUser?.role_id])
 
   const filteredUsers = useMemo(
     () =>
@@ -181,7 +198,8 @@ export default function UserManagementPage() {
 
   function openCreateModal() {
     setEditingUser(null)
-    setForm(initialForm)
+    // Default role_id to the first available role for the current user
+    setForm({ ...initialForm, role_id: availableRoles[0]?.id ?? 4 })
     setShowModal(true)
   }
 
@@ -352,30 +370,30 @@ export default function UserManagementPage() {
 
   // ── shared modal backdrop ───────────────────────────────────────────────────
   const Backdrop = ({ children }: { children: React.ReactNode }) => (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 backdrop-blur-sm sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 backdrop-blur-sm sm:items-center">
       {children}
     </div>
   )
 
   const inputCls =
-    "w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+    "w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-gray-500 dark:focus:ring-gray-700"
 
   const selectCls =
-    "w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100 appearance-none cursor-pointer"
+    "w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100 appearance-none cursor-pointer dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500 dark:focus:ring-gray-700"
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-8 sm:px-8">
+    <div className="min-h-screen bg-gray-50 px-4 py-8 sm:px-8 dark:bg-gray-950">
       <div className="mx-auto max-w-6xl">
 
         {/* ── Page header ── */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Users</h1>
-            <p className="mt-0.5 text-sm text-gray-500">Manage accounts, roles, and face training.</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">Users</h1>
+            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Manage accounts, roles, and face training.</p>
           </div>
           <button
             onClick={openCreateModal}
-            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-700 active:scale-95"
+            className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-700 active:scale-95 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300"
           >
             <Plus size={16} />
             Add user
@@ -384,18 +402,18 @@ export default function UserManagementPage() {
 
         {/* ── Search ── */}
         <div className="mb-4 relative max-w-sm">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none dark:text-gray-500" />
           <input
             type="text"
             placeholder="Search by name, email, or ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 transition"
+            className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 transition dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-gray-600 dark:focus:ring-gray-800"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
             >
               <X size={14} />
             </button>
@@ -403,11 +421,11 @@ export default function UserManagementPage() {
         </div>
 
         {/* ── Table ── */}
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-400">
+                <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500">
                   <th className="px-5 py-3">User</th>
                   <th className="px-5 py-3">Role</th>
                   <th className="px-5 py-3">Status</th>
@@ -416,31 +434,31 @@ export default function UserManagementPage() {
                   <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-16 text-center text-gray-400">
+                    <td colSpan={6} className="py-16 text-center text-gray-400 dark:text-gray-600">
                       <Loader2 size={20} className="mx-auto animate-spin" />
                     </td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-16 text-center">
-                      <User size={32} className="mx-auto mb-2 text-gray-200" />
-                      <p className="text-sm text-gray-400">No users found</p>
+                      <User size={32} className="mx-auto mb-2 text-gray-200 dark:text-gray-700" />
+                      <p className="text-sm text-gray-400 dark:text-gray-600">No users found</p>
                     </td>
                   </tr>
                 ) : (
                   filteredUsers.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={user.id} className="hover:bg-gray-50 transition-colors dark:hover:bg-gray-800/60">
                       {/* User */}
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <Avatar name={user.name} src={user.profile_image} size={36} />
                           <div>
-                            <p className="font-medium text-gray-900 leading-tight">{user.name}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
-                            <p className="text-xs text-gray-300 font-mono">{user.employee_id}</p>
+                            <p className="font-medium text-gray-900 leading-tight dark:text-gray-100">{user.name}</p>
+                            <p className="text-xs text-gray-400 mt-0.5 dark:text-gray-500">{user.email}</p>
+                            <p className="text-xs text-gray-300 font-mono dark:text-gray-600">{user.employee_id}</p>
                           </div>
                         </div>
                       </td>
@@ -462,13 +480,13 @@ export default function UserManagementPage() {
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
                             user.is_active
-                              ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
-                              : "bg-red-50 text-red-500 border border-red-200"
+                              ? "bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800"
+                              : "bg-red-50 text-red-500 border border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
                           }`}
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${
-                              user.is_active ? "bg-emerald-500" : "bg-red-400"
+                              user.is_active ? "bg-emerald-500 dark:bg-emerald-400" : "bg-red-400"
                             }`}
                           />
                           {user.is_active ? "Active" : "Inactive"}
@@ -479,7 +497,9 @@ export default function UserManagementPage() {
                       <td className="px-5 py-4">
                         <span
                           className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-                            user.is_trained ? "text-emerald-600" : "text-amber-500"
+                            user.is_trained
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-amber-500 dark:text-amber-400"
                           }`}
                         >
                           {user.is_trained ? (
@@ -498,13 +518,13 @@ export default function UserManagementPage() {
                             user.zone_permissions.map((z) => (
                               <span
                                 key={z.id}
-                                className="rounded-md bg-blue-50 px-2 py-0.5 text-xs text-blue-600 border border-blue-100"
+                                className="rounded-md bg-blue-50 px-2 py-0.5 text-xs text-blue-600 border border-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800"
                               >
                                 {z.zone?.name}
                               </span>
                             ))
                           ) : (
-                            <span className="text-xs text-gray-300">—</span>
+                            <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
                           )}
                         </div>
                       </td>
@@ -515,28 +535,28 @@ export default function UserManagementPage() {
                           <button
                             onClick={() => openEditModal(user)}
                             title="Edit"
-                            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-200"
                           >
                             <Pencil size={15} />
                           </button>
                           <button
                             onClick={() => openUploadModal(user)}
                             title="Upload training images"
-                            className="rounded-md p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                            className="rounded-md p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors dark:text-gray-500 dark:hover:bg-blue-900/40 dark:hover:text-blue-400"
                           >
                             <Camera size={15} />
                           </button>
                           <button
                             onClick={() => openTrainModal(user)}
                             title="Train face model"
-                            className="rounded-md p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+                            className="rounded-md p-1.5 text-gray-400 hover:bg-violet-50 hover:text-violet-600 transition-colors dark:text-gray-500 dark:hover:bg-violet-900/40 dark:hover:text-violet-400"
                           >
                             <Brain size={15} />
                           </button>
                           <button
                             onClick={() => handleDelete(user.id)}
                             title="Delete"
-                            className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                            className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors dark:text-gray-500 dark:hover:bg-red-900/40 dark:hover:text-red-400"
                           >
                             <Trash2 size={15} />
                           </button>
@@ -551,23 +571,23 @@ export default function UserManagementPage() {
 
           {/* Pagination */}
           {pages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-5 py-3">
-              <p className="text-xs text-gray-400">
-                Page <span className="font-medium text-gray-700">{page}</span> of{" "}
-                <span className="font-medium text-gray-700">{pages}</span>
+            <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-5 py-3 dark:border-gray-700 dark:bg-gray-800">
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                Page <span className="font-medium text-gray-700 dark:text-gray-300">{page}</span> of{" "}
+                <span className="font-medium text-gray-700 dark:text-gray-300">{pages}</span>
               </p>
               <div className="flex items-center gap-1">
                 <button
                   disabled={page <= 1}
                   onClick={() => setPage((p) => p - 1)}
-                  className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 transition border border-transparent hover:border-gray-200"
+                  className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 transition border border-transparent hover:border-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:border-gray-600"
                 >
                   <ChevronLeft size={13} /> Prev
                 </button>
                 <button
                   disabled={page >= pages}
                   onClick={() => setPage((p) => p + 1)}
-                  className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 transition border border-transparent hover:border-gray-200"
+                  className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-white hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 transition border border-transparent hover:border-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:border-gray-600"
                 >
                   Next <ChevronRight size={13} />
                 </button>
@@ -580,20 +600,20 @@ export default function UserManagementPage() {
       {/* ═══ CREATE / EDIT MODAL ═══════════════════════════════════════════════ */}
       {showModal && (
         <Backdrop>
-          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
             {/* Header */}
             <div className="mb-5 flex items-start justify-between">
               <div>
-                <h2 className="text-base font-semibold text-gray-900">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                   {editingUser ? "Edit user" : "Add user"}
                 </h2>
-                <p className="mt-0.5 text-xs text-gray-400">
+                <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                   {editingUser ? `Editing ${editingUser.name}` : "Fill in the details below."}
                 </p>
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
+                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition dark:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
               >
                 <X size={18} />
               </button>
@@ -602,7 +622,7 @@ export default function UserManagementPage() {
             <form onSubmit={handleSubmit} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Employee ID</label>
+                  <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Employee ID</label>
                   <input
                     type="text"
                     placeholder="EMP-001"
@@ -613,7 +633,7 @@ export default function UserManagementPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Full name</label>
+                  <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Full name</label>
                   <input
                     type="text"
                     placeholder="Jane Doe"
@@ -626,7 +646,7 @@ export default function UserManagementPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">Email</label>
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Email</label>
                 <input
                   type="email"
                   placeholder="jane@company.com"
@@ -638,8 +658,13 @@ export default function UserManagementPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">
-                  Password {editingUser && <span className="font-normal text-gray-400">(leave blank to keep current)</span>}
+                <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Password{" "}
+                  {editingUser && (
+                    <span className="font-normal text-gray-400 dark:text-gray-500">
+                      (leave blank to keep current)
+                    </span>
+                  )}
                 </label>
                 <input
                   type="password"
@@ -653,8 +678,9 @@ export default function UserManagementPage() {
 
               {!editingUser && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">
-                    Profile image URL <span className="font-normal text-gray-400">(optional)</span>
+                  <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                    Profile image URL{" "}
+                    <span className="font-normal text-gray-400 dark:text-gray-500">(optional)</span>
                   </label>
                   <input
                     type="text"
@@ -668,14 +694,14 @@ export default function UserManagementPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Role</label>
+                  <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Role</label>
                   <div className="relative">
                     <select
                       value={form.role_id}
                       onChange={(e) => setForm({ ...form, role_id: Number(e.target.value) })}
                       className={selectCls}
                     >
-                      {roles.map((role) => (
+                      {availableRoles.map((role) => (
                         <option key={role.id} value={role.id}>
                           {role.name}
                         </option>
@@ -684,7 +710,7 @@ export default function UserManagementPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Status</label>
+                  <label className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Status</label>
                   <div className="relative">
                     <select
                       value={String(form.is_active)}
@@ -702,14 +728,14 @@ export default function UserManagementPage() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition"
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-700 disabled:opacity-60 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-300"
                 >
                   {loading && <Loader2 size={14} className="animate-spin" />}
                   {editingUser ? "Save changes" : "Create user"}
@@ -723,19 +749,21 @@ export default function UserManagementPage() {
       {/* ═══ IMAGE UPLOAD MODAL ════════════════════════════════════════════════ */}
       {showUploadModal && uploadTargetUser && (
         <Backdrop>
-          <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white shadow-xl">
+          <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
             {/* Header */}
-            <div className="flex items-start justify-between border-b border-gray-100 px-5 py-4">
+            <div className="flex items-start justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-700">
               <div className="flex items-center gap-3">
                 <Avatar name={uploadTargetUser.name} src={uploadTargetUser.profile_image} size={32} />
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Upload training images</p>
-                  <p className="text-xs text-gray-400">{uploadTargetUser.name} · {uploadTargetUser.employee_id}</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Upload training images</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    {uploadTargetUser.name} · {uploadTargetUser.employee_id}
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowUploadModal(false)}
-                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 transition"
+                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 transition dark:text-gray-500 dark:hover:bg-gray-700"
               >
                 <X size={18} />
               </button>
@@ -743,11 +771,17 @@ export default function UserManagementPage() {
 
             <div className="p-5 space-y-4">
               {/* Requirement note */}
-              <div className="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3.5 py-2.5 text-xs text-blue-600">
+              <div className="flex items-center gap-2 rounded-lg bg-blue-50 border border-blue-100 px-3.5 py-2.5 text-xs text-blue-600 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-400">
                 <ImagePlus size={14} className="shrink-0" />
                 <span>
                   Minimum <strong>{MIN_TRAINING_IMAGES}</strong> images required.{" "}
-                  <span className={selectedFiles.length >= MIN_TRAINING_IMAGES ? "text-emerald-600 font-medium" : ""}>
+                  <span
+                    className={
+                      selectedFiles.length >= MIN_TRAINING_IMAGES
+                        ? "text-emerald-600 font-medium dark:text-emerald-400"
+                        : ""
+                    }
+                  >
                     {selectedFiles.length} selected.
                   </span>
                 </span>
@@ -757,7 +791,7 @@ export default function UserManagementPage() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-7 text-gray-400 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-500 active:scale-[0.99]"
+                className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-7 text-gray-400 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-500 active:scale-[0.99] dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500 dark:hover:border-blue-700 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
               >
                 <Upload size={22} />
                 <span className="text-xs">Click to pick images — jpg, png, webp</span>
@@ -779,12 +813,12 @@ export default function UserManagementPage() {
                       <img
                         src={src}
                         alt={`preview-${idx}`}
-                        className="h-20 w-full rounded-lg object-cover border border-gray-100"
+                        className="h-20 w-full rounded-lg object-cover border border-gray-100 dark:border-gray-700"
                       />
                       <button
                         type="button"
                         onClick={() => removePreview(idx)}
-                        className="absolute right-1 top-1 rounded-full bg-white/90 p-0.5 text-gray-500 opacity-0 group-hover:opacity-100 transition hover:bg-red-50 hover:text-red-500 border border-gray-200"
+                        className="absolute right-1 top-1 rounded-full bg-white/90 p-0.5 text-gray-500 opacity-0 group-hover:opacity-100 transition hover:bg-red-50 hover:text-red-500 border border-gray-200 dark:bg-gray-800/90 dark:text-gray-400 dark:border-gray-600 dark:hover:bg-red-900/40 dark:hover:text-red-400"
                       >
                         <X size={10} />
                       </button>
@@ -799,7 +833,7 @@ export default function UserManagementPage() {
               {/* Progress bar */}
               {selectedFiles.length > 0 && (
                 <div>
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
                         selectedFiles.length >= MIN_TRAINING_IMAGES ? "bg-emerald-500" : "bg-blue-400"
@@ -812,13 +846,13 @@ export default function UserManagementPage() {
 
               {/* Alerts */}
               {uploadError && (
-                <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3.5 py-2.5 text-xs text-red-600">
+                <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3.5 py-2.5 text-xs text-red-600 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400">
                   <AlertCircle size={14} className="shrink-0 mt-0.5" />
                   {uploadError}
                 </div>
               )}
               {uploadSuccess && (
-                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-100 px-3.5 py-2.5 text-xs text-emerald-600">
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-100 px-3.5 py-2.5 text-xs text-emerald-600 dark:bg-emerald-900/20 dark:border-emerald-800 dark:text-emerald-400">
                   <CheckCircle2 size={14} className="shrink-0" />
                   Images uploaded successfully!
                 </div>
@@ -826,11 +860,11 @@ export default function UserManagementPage() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-4">
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-gray-700">
               <button
                 type="button"
                 onClick={() => setShowUploadModal(false)}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition"
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
               >
                 Cancel
               </button>
@@ -838,12 +872,16 @@ export default function UserManagementPage() {
                 type="button"
                 onClick={handleImageUpload}
                 disabled={uploading || selectedFiles.length < MIN_TRAINING_IMAGES}
-                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
               >
                 {uploading ? (
                   <><Loader2 size={14} className="animate-spin" /> Uploading…</>
                 ) : (
-                  <><Upload size={14} /> Upload {selectedFiles.length > 0 ? `${selectedFiles.length} image${selectedFiles.length !== 1 ? "s" : ""}` : "images"}</>
+                  <><Upload size={14} /> Upload{" "}
+                    {selectedFiles.length > 0
+                      ? `${selectedFiles.length} image${selectedFiles.length !== 1 ? "s" : ""}`
+                      : "images"}
+                  </>
                 )}
               </button>
             </div>
@@ -854,16 +892,19 @@ export default function UserManagementPage() {
       {/* ═══ TRAIN MODAL ═══════════════════════════════════════════════════════ */}
       {showTrainModal && trainTargetUser && (
         <Backdrop>
-          <div className="flex w-full max-w-2xl flex-col rounded-2xl border border-gray-200 bg-white shadow-xl" style={{ maxHeight: "88vh" }}>
+          <div
+            className="flex w-full max-w-2xl flex-col rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+            style={{ maxHeight: "88vh" }}
+          >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-700">
               <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100">
-                  <Brain size={16} className="text-violet-600" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/40">
+                  <Brain size={16} className="text-violet-600 dark:text-violet-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Face training</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Face training</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
                     {trainTargetUser.name} · {trainTargetUser.employee_id}
                   </p>
                 </div>
@@ -871,7 +912,7 @@ export default function UserManagementPage() {
               <button
                 onClick={() => !training && setShowTrainModal(false)}
                 disabled={training}
-                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 transition disabled:opacity-30"
+                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 transition disabled:opacity-30 dark:text-gray-500 dark:hover:bg-gray-700"
               >
                 <X size={18} />
               </button>
@@ -881,12 +922,12 @@ export default function UserManagementPage() {
             <div
               className={`flex items-center gap-2 px-5 py-2.5 text-xs font-medium transition-colors ${
                 trainSuccess === true
-                  ? "bg-emerald-50 text-emerald-600"
+                  ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
                   : trainSuccess === false
-                  ? "bg-red-50 text-red-500"
+                  ? "bg-red-50 text-red-500 dark:bg-red-900/20 dark:text-red-400"
                   : training
-                  ? "bg-violet-50 text-violet-600"
-                  : "bg-gray-50 text-gray-400"
+                  ? "bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-400"
+                  : "bg-gray-50 text-gray-400 dark:bg-gray-800 dark:text-gray-500"
               }`}
             >
               {training && <Loader2 size={12} className="animate-spin" />}
@@ -920,8 +961,8 @@ export default function UserManagementPage() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between border-t border-gray-100 px-5 py-4">
-              <p className="text-xs text-gray-400 font-mono">
+            <div className="flex items-center justify-between border-t border-gray-100 px-5 py-4 dark:border-gray-700">
+              <p className="text-xs text-gray-400 font-mono dark:text-gray-500">
                 models/2_augment_faces.py
               </p>
               <div className="flex items-center gap-2">
@@ -929,7 +970,7 @@ export default function UserManagementPage() {
                   type="button"
                   onClick={() => setShowTrainModal(false)}
                   disabled={training}
-                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition disabled:opacity-40"
+                  className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition disabled:opacity-40 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800"
                 >
                   Close
                 </button>
@@ -937,7 +978,7 @@ export default function UserManagementPage() {
                   type="button"
                   onClick={startTraining}
                   disabled={training || (trainDone && trainSuccess === true)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-700 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-violet-700 disabled:opacity-50 dark:bg-violet-500 dark:hover:bg-violet-600"
                 >
                   {training ? (
                     <><Loader2 size={14} className="animate-spin" /> Training…</>

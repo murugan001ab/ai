@@ -4,6 +4,7 @@ import {
   Video,
   ShieldCheck,
   FileBarChart,
+  FileBarChart2,
   Settings,
   ChevronRight,
   Activity,
@@ -21,13 +22,18 @@ const menus = [
   { label: 'PPE Compliance', icon: ShieldCheck, path: '/ppe' },
   { label: 'Illegal Entry', icon: ShieldAlert, path: '/illegal-entry' },
   { label: 'Idle Moniter', icon: FileBarChart, path: '/idle-moniter' },
-  { label: 'Reports', icon: FileBarChart, path: '/reports' },
+  { label: 'Reports', icon: FileBarChart2, path: '/reports' },
 ]
 
 const adminMenus = [
   { label: 'Camera Management', icon: Cctv, path: '/cameras' },
   { label: 'Zone Management', icon: MapPin, path: '/zones' },
   { label: 'User Management', icon: User, path: '/users' },
+
+]
+
+const superAdminMenus = [
+
 
 ]
 
@@ -126,12 +132,14 @@ export default function Sidebar() {
           </div>
         )}
 
-        <button className='w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-800 hover:text-white transition-all duration-200'>
+        <Link to={'/settings'}
+        className='w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-800 hover:text-white transition-all duration-200'>
           <Settings className='h-4 w-4' />
           Settings
-        </button>
+        </Link>
 
         <button
+          
           onClick={logout}
           className='w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200'
         >

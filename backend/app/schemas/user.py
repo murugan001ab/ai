@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr
 
 from app.schemas.role import RoleRead
 
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from app.schemas.misc import ZoneRead
 
 
@@ -70,3 +70,21 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class PasswordVerifyRequest(BaseModel):
+
+    current_password: str = Field(
+        min_length=6
+    )
+
+
+class PasswordChangeRequest(BaseModel):
+
+    current_password: str = Field(
+        min_length=6
+    )
+
+    new_password: str = Field(
+        min_length=6
+    )

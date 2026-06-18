@@ -7,10 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "doctor": "npx react-doctor@latest"
   },
   "dependencies": {
     "@mux/mux-video-react": "^0.31.0",
+    "@react-pdf/renderer": "^4.5.1",
     "axios": "^1.7.9",
     "hls.js": "^1.6.16",
     "lucide-react": "^1.14.0",

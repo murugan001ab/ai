@@ -12,14 +12,38 @@ from app.models.user import User
 
 DBSession = Annotated[AsyncSession, Depends(get_session)]
 
+# ---------------------------------------------------------------------------
+# Role constants
+# ---------------------------------------------------------------------------
 
+ROLE_SUPER_ADMIN = "SUPER_ADMIN"
+ROLE_ADMIN = "ADMIN"
+ROLE_SUPERVISOR = "SUPERVISOR"
+ROLE_USER = "USER"
+
+# Roles that each actor is allowed to assign / manage
+CREATABLE_ROLES: dict[str, set[str]] = {
+    ROLE_SUPER_ADMIN: {ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_USER},
+    ROLE_ADMIN:       {ROLE_SUPERVISOR, ROLE_USER},
+    ROLE_SUPERVISOR:  {ROLE_USER},
+}
+
+# Roles that are visible to each actor in list/get operations
+VISIBLE_ROLES: dict[str, set[str]] = {
+    ROLE_SUPER_ADMIN: {ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_USER},
+    ROLE_ADMIN:       {ROLE_SUPERVISOR, ROLE_USER},
+    ROLE_SUPERVISOR:  {ROLE_USER},
+}
+
+
+# ---------------------------------------------------------------------------
+# Core auth helpers
+# ---------------------------------------------------------------------------
 
 async def get_current_user(
     db: DBSession,
     access_token: Optional[str] = Cookie(default=None),
 ) -> User:
-    
-
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -50,7 +74,6 @@ async def get_current_user(
     )
 
     result = await db.execute(stmt)
-
     user = result.scalar_one_or_none()
 
     if not user:
@@ -68,94 +91,90 @@ async def get_current_user(
     return user
 
 
-
-
 async def get_current_active_user(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
     return current_user
 
 
-
+# ---------------------------------------------------------------------------
+# Role-specific guards
+# ---------------------------------------------------------------------------
 
 async def require_supervisor(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-
-    if not current_user.role or current_user.role.name != "SUPERVISOR":
+    if not current_user.role or current_user.role.name != ROLE_SUPERVISOR:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Supervisor access required",
         )
-
     return current_user
 
 
 async def require_admin(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-
-    if not current_user.role or current_user.role.name != "ADMIN":
+    if not current_user.role or current_user.role.name != ROLE_ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
         )
-
     return current_user
 
 
 async def require_superadmin(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-
-    if not current_user.role or current_user.role.name != "SUPER_ADMIN":
+    if not current_user.role or current_user.role.name != ROLE_SUPER_ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super Admin access required",
         )
-
     return current_user
 
 
 async def require_admin_or_superadmin(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-
     if (
         not current_user.role
-        or current_user.role.name not in ["ADMIN", "SUPER_ADMIN"]
+        or current_user.role.name not in [ROLE_ADMIN, ROLE_SUPER_ADMIN]
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin or Super Admin access required",
         )
-
     return current_user
 
 
+async def require_admin_or_supervisor(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Allows SUPER_ADMIN, ADMIN, and SUPERVISOR — used for user-management endpoints."""
+    if (
+        not current_user.role
+        or current_user.role.name not in [ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_SUPERVISOR]
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or Supervisor access required",
+        )
+    return current_user
 
 
-CurrentUser = Annotated[
-    User,
-    Depends(get_current_active_user)
-]
+# ---------------------------------------------------------------------------
+# Typed dependency aliases
+# ---------------------------------------------------------------------------
 
-Supervisor = Annotated[
-    User,
-    Depends(require_supervisor)
-]
+CurrentUser = Annotated[User, Depends(get_current_active_user)]
 
-AdminUser = Annotated[
-    User,
-    Depends(require_admin)
-]
+Supervisor = Annotated[User, Depends(require_supervisor)]
 
-SuperAdminUser = Annotated[
-    User,
-    Depends(require_superadmin)
-]
+AdminUser = Annotated[User, Depends(require_admin)]
 
-AdminOrSuperAdmin = Annotated[
-    User,
-    Depends(require_admin_or_superadmin)
-]
+SuperAdminUser = Annotated[User, Depends(require_superadmin)]
+
+AdminOrSuperAdmin = Annotated[User, Depends(require_admin_or_superadmin)]
+
+AdminOrSupervisor = Annotated[User, Depends(require_admin_or_supervisor)]

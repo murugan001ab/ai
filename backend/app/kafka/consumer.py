@@ -57,6 +57,11 @@ async def _consume_loop(topics: List[str]) -> None:
                         await face_buffer.add(data)
                         logger.debug(f"[face-events] received: {data}")
 
+                    if event_type == "idle-events":
+                        from app.services.idle_buffer import idle_buffer
+                        await idle_buffer.add(data)
+                        logger.debug(f"[idle-events] received: {data}")
+
                     logger.debug(f"[Kafka→WS] topic={event_type} camera={camera_id}")
                 except Exception as exc:
                     logger.error(f"Error processing Kafka message: {exc}")

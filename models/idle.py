@@ -727,7 +727,7 @@ while True:
 
                                 event = {
 
-                                    "event_name":
+                                    "event_type":
                                         "idle-events",
 
                                     "camera_id":
@@ -736,14 +736,13 @@ while True:
                                     "zone_id":
                                         ZONE_ID,
 
-                                    "worker_id":
-                                        f"Worker_{display_id}",
+                                    "name":name,
 
                                     "idle_duration":
                                         idle_time,
 
                                     "image_path":
-                                        path,
+                                        filename,
 
                                     "timestamp":
                                         int(current_time)
@@ -764,7 +763,7 @@ while True:
 
                                 print(
                                     f"IDLE DETECTED: "
-                                    f"Worker_{display_id}"
+                                    f"Worker_{name}"
                                 )
 
                                 person_history[tid][

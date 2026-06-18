@@ -4,6 +4,7 @@ from app.api.deps.auth import (
     AdminUser,
     SuperAdminUser,
     AdminOrSuperAdmin,
+    AdminOrSupervisor,
     Supervisor,
     get_current_user,
     get_current_active_user,
@@ -11,6 +12,13 @@ from app.api.deps.auth import (
     require_supervisor,
     require_superadmin,
     require_admin_or_superadmin,
+    require_admin_or_supervisor,
+    ROLE_SUPER_ADMIN,
+    ROLE_ADMIN,
+    ROLE_SUPERVISOR,
+    ROLE_USER,
+    CREATABLE_ROLES,
+    VISIBLE_ROLES,
 )
 
 __all__ = [
@@ -19,6 +27,7 @@ __all__ = [
     "AdminUser",
     "SuperAdminUser",
     "AdminOrSuperAdmin",
+    "AdminOrSupervisor",
     "Supervisor",
     "get_current_user",
     "get_current_active_user",
@@ -26,4 +35,11 @@ __all__ = [
     "require_supervisor",
     "require_superadmin",
     "require_admin_or_superadmin",
+    "require_admin_or_supervisor",
+    "ROLE_SUPER_ADMIN",
+    "ROLE_ADMIN",
+    "ROLE_SUPERVISOR",
+    "ROLE_USER",
+    "CREATABLE_ROLES",
+    "VISIBLE_ROLES",
 ]

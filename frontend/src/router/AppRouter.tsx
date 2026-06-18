@@ -9,6 +9,9 @@ import Login               from '../pages/Login'
 import UserManagementPage from '../pages/UserManagementPage'
 import IlligalEntry      from '../pages/IlligalEntry'
 import { Loader2 }         from 'lucide-react'
+import Idle from '../pages/Idle'
+import Setting from '../pages/Setting'
+import Reports from '../pages/Reports'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -40,7 +43,10 @@ export default function AppRouter() {
       <Route path='/zones' element={<ProtectedRoute><ZoneManagement /></ProtectedRoute>} />
       <Route path='/users'         element={<ProtectedRoute><UserManagementPage /></ProtectedRoute>} />
       <Route path='/illegal-entry' element={<ProtectedRoute><IlligalEntry /></ProtectedRoute>} />
-
+      <Route path='/idle-moniter' element={<ProtectedRoute><Idle /></ProtectedRoute>} />
+      <Route path='/settings' element={<ProtectedRoute><Setting /></ProtectedRoute>} />
+      <Route path='/reports' element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+      
     </Routes>
   )
 }
